@@ -1,4 +1,4 @@
-import { Pool, type QueryResultRow } from "pg";
+import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 export class DatabaseService {
     private readonly pool: Pool;
@@ -27,6 +27,34 @@ export class DatabaseService {
     ): Promise<T[]> {
         const result = await this.pool.query<T>(sql, values);
         return result.rows;
+    }
+
+    async withReadOnlyTransaction<T>(
+        callback: (client: PoolClient) => Promise<T>,
+    ): Promise<T> {
+        const client = await this.pool.connect();
+
+        try {
+            await client.query("BEGIN READ ONLY");
+
+            // Cancel queries that exceed 10 seconds.
+            await client.query("SET LOCAL statement_timeout = '10s'");
+
+            const result = await callback(client);
+
+            await client.query("COMMIT");
+
+            return result;
+        } catch (error) {
+            try {
+                await client.query("ROLLBACK");
+            } catch (error) {
+                // preserve the original error if rollback fails
+            }
+            throw error;
+        } finally {
+            client.release();
+        }
     }
 }
 

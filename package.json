@@ -14,7 +14,8 @@
         "db:tables": "tsx src/scripts/test-tables.ts",
         "db:columns": "tsx src/scripts/test-columns.ts",
         "db:constraints": "tsx src/scripts/test-constraints.ts",
-        "db:schema:full": "tsx src/scripts/test-full-schema.ts"
+        "db:schema:full": "tsx src/scripts/test-full-schema.ts",
+        "query:test": "tsx src/scripts/test-query-service.ts"
     },
     "keywords": [],
     "author": "Ronish Ghimire",
@@ -30,6 +31,7 @@
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.2",
         "pg": "^8.23.1",
+        "pgsql-ast-parser": "^12.0.2",
         "zod": "^4.6.7"
     }
 }
