@@ -16,6 +16,20 @@ const DISALLOWED_STATEMENT_TYPES = new Set([
     "rename",
 ]);
 
+const DISALLOWED_FUNCTIONS = new Set([
+    "pg_terminate_backend",
+    "pg_cancel_backend",
+    "pg_read_file",
+    "pg_read_binary_file",
+    "pg_ls_dir",
+    "pg_log_backend_memory_contexts",
+    "pg_reload_conf",
+    "pg_rotate_logfile",
+    "set_config",
+    "lo_import",
+    "lo_export",
+]);
+
 interface ValidationResult {
     valid: boolean;
     reason?: string;
@@ -120,6 +134,18 @@ export class SqlValidator {
             DISALLOWED_STATEMENT_TYPES.has(record.type)
         ) {
             return `Operation '${record.type}' is not allowed`;
+        }
+
+        const functionNode = record.function;
+        if (
+            record.type === "call" &&
+            typeof functionNode === "object" &&
+            functionNode !== null &&
+            "name" in functionNode &&
+            typeof functionNode.name === "string" &&
+            DISALLOWED_FUNCTIONS.has(functionNode.name.toLowerCase())
+        ) {
+            return `Function '${functionNode.name}' is not allowed`;
         }
 
         // Reject SELECT FOR UPDATE / SHARE
