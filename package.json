@@ -8,7 +8,8 @@
         "dev": "tsx watch src/index.ts",
         "build": "tsc",
         "start": "node dist/index.js",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "db:test": "tsx src/scripts/test-database.ts"
     },
     "keywords": [],
     "author": "Ronish Ghimire",
@@ -16,11 +17,14 @@
     "packageManager": "pnpm@10.17.1",
     "devDependencies": {
         "@types/node": "^26.6.6",
+        "@types/pg": "^8.23.1",
         "tsx": "^4.23.15",
-        "typescript": "^7.0.2"
+        "typescript": "^7.0.2",
+        "vitest": "^5.1.1"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.2",
+        "pg": "^8.23.1",
         "zod": "^4.6.7"
     }
 }
