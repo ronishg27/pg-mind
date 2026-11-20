@@ -78,42 +78,55 @@ export class SchemaService {
         schemaName: string,
         tableName: string,
     ): Promise<KeyConstraint[]> {
-        const sql = `
+        return this.database.query<KeyConstraint>(
+            `
             SELECT
-            tc.constraint_name,
-            tc.table_schema,
-            tc.table_name,
-            kcu.column_name,
-            tc.constraint_type,
-            CASE
-                WHEN tc.constraint_type = 'FOREIGN KEY'
-                THEN ccu.table_schema
+                con.conname AS constraint_name,
+                ns.nspname AS table_schema,
+                cls.relname AS table_name,
+                att.attname AS column_name,
+                CASE con.contype
+                WHEN 'p' THEN 'PRIMARY KEY'
+                WHEN 'f' THEN 'FOREIGN KEY'
+                END AS constraint_type,
+                CASE
+                WHEN con.contype = 'f' THEN ref_ns.nspname
                 ELSE NULL
-            END AS foreign_table_schema,
-            CASE
-                WHEN tc.constraint_type = 'FOREIGN KEY'
-                THEN ccu.table_name
+                END AS foreign_table_schema,
+                CASE
+                WHEN con.contype = 'f' THEN ref_cls.relname
                 ELSE NULL
-            END AS foreign_table_name,
-            CASE
-                WHEN tc.constraint_type = 'FOREIGN KEY'
-                THEN ccu.column_name
+                END AS foreign_table_name,
+                CASE
+                WHEN con.contype = 'f' THEN ref_att.attname
                 ELSE NULL
-            END AS foreign_column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name
-                AND tc.table_schema = kcu.table_schema
-                AND tc.table_name = kcu.table_name
-            LEFT JOIN information_schema.constraint_column_usage ccu
-                ON tc.constraint_name = ccu.constraint_name
-                AND tc.table_schema = ccu.constraint_schema
-            WHERE tc.table_schema = $1
-                AND tc.table_name = $2
-                AND tc.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY')
-            ORDER BY tc.constraint_type, kcu.ordinal_position;
-        `;
-        return this.database.query<KeyConstraint>(sql, [schemaName, tableName]);
+                END AS foreign_column_name
+            FROM pg_catalog.pg_constraint con
+            JOIN pg_catalog.pg_class cls
+                ON cls.oid = con.conrelid
+            JOIN pg_catalog.pg_namespace ns
+                ON ns.oid = cls.relnamespace
+            JOIN pg_catalog.pg_attribute att
+                ON att.attrelid = con.conrelid
+                AND att.attnum = ANY(con.conkey)
+            LEFT JOIN pg_catalog.pg_class ref_cls
+                ON ref_cls.oid = con.confrelid
+            LEFT JOIN pg_catalog.pg_namespace ref_ns
+                ON ref_ns.oid = ref_cls.relnamespace
+            LEFT JOIN pg_catalog.pg_attribute ref_att
+                ON ref_att.attrelid = con.confrelid
+                AND ref_att.attnum =
+                con.confkey[array_position(con.conkey, att.attnum)]
+            WHERE ns.nspname = $1
+                AND cls.relname = $2
+                AND con.contype IN ('p', 'f')
+            ORDER BY
+                con.contype,
+                con.conname,
+                array_position(con.conkey, att.attnum);
+            `,
+            [schemaName, tableName],
+        );
     }
 
     async getDatabaseSchema(): Promise<DatabaseSchema> {

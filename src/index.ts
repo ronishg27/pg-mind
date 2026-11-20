@@ -3,6 +3,7 @@ import { SqlValidator } from "./modules/query/sql-validator.js";
 import { QueryService } from "./modules/query/query.service.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SchemaService } from "./modules/schema/schema.service.js";
 import { z } from "zod";
 
 process.loadEnvFile(".env");
@@ -14,6 +15,7 @@ if (!connectionString) {
 const database = new DatabaseService(connectionString);
 const validator = new SqlValidator();
 const queryService = new QueryService(database, validator);
+const schemaService = new SchemaService(database);
 
 const server = new McpServer({
     name: "querymind",
@@ -77,6 +79,42 @@ server.registerTool(
                             error instanceof Error
                                 ? error.message
                                 : "An unknown error occurred",
+                    },
+                ],
+            };
+        }
+    },
+);
+
+server.registerTool(
+    "get_database_schema",
+    {
+        description:
+            "Discover the connected PostgreSQL database schemas, tables, columns, and key constraints.",
+        inputSchema: z.object({}),
+    },
+    async () => {
+        try {
+            const schema = await schemaService.getDatabaseSchema();
+
+            return {
+                content: [
+                    {
+                        type: "text" as const,
+                        text: JSON.stringify(schema, null, 2),
+                    },
+                ],
+            };
+        } catch (error) {
+            return {
+                isError: true,
+                content: [
+                    {
+                        type: "text" as const,
+                        text:
+                            error instanceof Error
+                                ? error.message
+                                : "Failed to discover database schema",
                     },
                 ],
             };
