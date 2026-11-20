@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type QueryResultRow } from "pg";
 
 export class DatabaseService {
     private readonly pool: Pool;
@@ -19,6 +19,14 @@ export class DatabaseService {
 
     async close(): Promise<void> {
         await this.pool.end();
+    }
+
+    async query<T extends QueryResultRow>(
+        sql: string,
+        values: unknown[] = [],
+    ): Promise<T[]> {
+        const result = await this.pool.query<T>(sql, values);
+        return result.rows;
     }
 }
 

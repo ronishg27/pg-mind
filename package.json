@@ -9,7 +9,12 @@
         "build": "tsc",
         "start": "node dist/index.js",
         "typecheck": "tsc --noEmit",
-        "db:test": "tsx src/scripts/test-database.ts"
+        "db:test": "tsx src/scripts/test-database.ts",
+        "db:schema": "tsx src/scripts/test-schema.ts",
+        "db:tables": "tsx src/scripts/test-tables.ts",
+        "db:columns": "tsx src/scripts/test-columns.ts",
+        "db:constraints": "tsx src/scripts/test-constraints.ts",
+        "db:schema:full": "tsx src/scripts/test-full-schema.ts"
     },
     "keywords": [],
     "author": "Ronish Ghimire",
