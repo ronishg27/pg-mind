@@ -4,6 +4,11 @@ import { QueryService } from "./modules/query/query.service.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SchemaService } from "./modules/schema/schema.service.js";
+import { ApprovalStore } from "./modules/approval/approval.store.js";
+import { ApprovalService } from "./modules/approval/approval.service.js";
+import { ApprovalWorkflowService } from "./modules/approval/approval-workflow.service.js";
+import { McpApprovalConfirmationProvider } from "./modules/approval/mcp-approval-confirmation.provider.js";
+import { SqlOperationClassifier } from "./modules/query/sql-operation-classifier.js";
 import { z } from "zod";
 
 process.loadEnvFile(".env");
@@ -26,6 +31,23 @@ const server = new McpServer({
     name: "querymind",
     version: "1.0.0",
 });
+
+const approvalStore = new ApprovalStore();
+
+const operationClassifier = new SqlOperationClassifier();
+
+const approvalService = new ApprovalService(
+    approvalStore,
+    operationClassifier,
+    database,
+);
+
+const confirmationProvider = new McpApprovalConfirmationProvider(server);
+
+const approvalWorkflow = new ApprovalWorkflowService(
+    approvalService,
+    confirmationProvider,
+);
 
 // first tool ping
 server.registerTool(
@@ -120,6 +142,44 @@ server.registerTool(
                             error instanceof Error
                                 ? error.message
                                 : "Failed to discover database schema",
+                    },
+                ],
+            };
+        }
+    },
+);
+
+server.registerTool(
+    "prepare_operation",
+    {
+        description:
+            "Prepare a database write operation and request explicit human approval. Does not execute SQL.",
+        inputSchema: z.object({
+            sql: z.string().min(1).max(50_000),
+        }),
+    },
+    async ({ sql }) => {
+        try {
+            const result = await approvalWorkflow.prepareAndConfirm(sql);
+
+            return {
+                content: [
+                    {
+                        type: "text" as const,
+                        text: JSON.stringify(result, null, 2),
+                    },
+                ],
+            };
+        } catch (error) {
+            return {
+                isError: true,
+                content: [
+                    {
+                        type: "text" as const,
+                        text:
+                            error instanceof Error
+                                ? error.message
+                                : "Failed to prepare database operation.",
                     },
                 ],
             };
