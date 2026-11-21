@@ -7,12 +7,17 @@ import { SchemaService } from "./modules/schema/schema.service.js";
 import { z } from "zod";
 
 process.loadEnvFile(".env");
-const connectionString = process.env.QUERY_DATABASE_URL;
-if (!connectionString) {
+const queryConnectionString = process.env.QUERY_DATABASE_URL;
+const writeConnectionString = process.env.WRITE_DATABASE_URL;
+
+if (!queryConnectionString) {
     throw new Error("QUERY_DATABASE_URL is not configured");
 }
 
-const database = new DatabaseService(connectionString);
+const database = new DatabaseService(
+    queryConnectionString,
+    writeConnectionString,
+);
 const validator = new SqlValidator();
 const queryService = new QueryService(database, validator);
 const schemaService = new SchemaService(database);

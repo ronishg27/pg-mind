@@ -15,7 +15,10 @@
         "db:columns": "tsx src/scripts/test-columns.ts",
         "db:constraints": "tsx src/scripts/test-constraints.ts",
         "db:schema:full": "tsx src/scripts/test-full-schema.ts",
-        "query:test": "tsx src/scripts/test-query-service.ts"
+        "query:test": "tsx src/scripts/test-query-service.ts",
+        "test": "vitest run --coverage",
+        "test:watch": "vitest watch",
+        "db:write:test": "tsx src/scripts/test-write-connection.ts"
     },
     "keywords": [],
     "author": "Ronish Ghimire",
@@ -24,6 +27,7 @@
     "devDependencies": {
         "@types/node": "^26.6.6",
         "@types/pg": "^8.23.1",
+        "@vitest/coverage-v8": "5.1.1",
         "tsx": "^4.23.15",
         "typescript": "^7.0.2",
         "vitest": "^5.1.1"
