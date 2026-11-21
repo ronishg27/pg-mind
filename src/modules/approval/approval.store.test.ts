@@ -210,6 +210,49 @@ describe("ApprovalStore", () => {
 
             expect(result.status).toBe("failed");
         });
+
+        it("should allow executing to execution_unknown", () => {
+            const request = store.create({
+                sql: "UPDATE products SET price = 500",
+                operation: "UPDATE",
+                database: "querymind_dev",
+            });
+
+            store.updateStatus(request.id, "approved");
+            store.updateStatus(request.id, "executing");
+
+            const result = store.updateStatus(request.id, "execution_unknown");
+
+            expect(result.status).toBe("execution_unknown");
+        });
+
+        it("should not allow retrying an execution_unknown request", () => {
+            const request = store.create({
+                sql: "UPDATE products SET price = 500",
+                operation: "UPDATE",
+                database: "querymind_dev",
+            });
+
+            store.updateStatus(request.id, "approved");
+            store.updateStatus(request.id, "executing");
+            store.updateStatus(request.id, "execution_unknown");
+
+            expect(() => store.updateStatus(request.id, "executing")).toThrow();
+        });
+
+        it("should not allow execution_unknown to become executed", () => {
+            const request = store.create({
+                sql: "UPDATE products SET price = 500",
+                operation: "UPDATE",
+                database: "querymind_dev",
+            });
+
+            store.updateStatus(request.id, "approved");
+            store.updateStatus(request.id, "executing");
+            store.updateStatus(request.id, "execution_unknown");
+
+            expect(() => store.updateStatus(request.id, "executed")).toThrow();
+        });
     });
 
     describe("deleteExpired", () => {

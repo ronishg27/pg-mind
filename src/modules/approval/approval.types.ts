@@ -7,7 +7,8 @@ export type ApprovalStatus =
     | "rejected"
     | "expired"
     | "executed"
-    | "failed";
+    | "failed"
+    | "execution_unknown"; // This status is used when the execution result is unknown due to an error or unexpected situation.
 
 export interface ApprovalRequest {
     id: string;
@@ -18,4 +19,12 @@ export interface ApprovalRequest {
     createdAt: Date;
     expiresAt: Date;
     affectedRows?: number;
+}
+
+export interface OperationExecutionResult {
+    approvalId: string;
+    operation: SqlOperation;
+    database: string;
+    affectedRows: number;
+    status: "executed";
 }

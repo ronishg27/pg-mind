@@ -7,11 +7,12 @@ const APPROVAL_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const ALLOWED_TRANSITIONS: Record<ApprovalStatus, ApprovalStatus[]> = {
     pending: ["approved", "rejected", "expired"],
     approved: ["executing", "expired"],
-    executing: ["executed", "failed"],
+    executing: ["executed", "failed", "execution_unknown"],
     rejected: [],
     expired: [],
     executed: [],
     failed: [],
+    execution_unknown: [],
 };
 
 export class ApprovalStore {
