@@ -1,3 +1,4 @@
+import config from "../config/index.js";
 import { DatabaseService } from "../modules/database/database.service.js";
 
 process.loadEnvFile(".env");
@@ -23,16 +24,19 @@ async function main() {
         console.log("Read connection:", readResult[0].current_user);
 
         // Verify write connection inside a transaction.
-        await database.withWriteTransaction(async (client) => {
-            const result = await client.query(
-                "INSERT INTO products (name, price, stock) VALUES ($1, $2, $3) RETURNING id",
-                ["QueryMind Transaction Test", 10.0, 5],
-            );
+        await database.withWriteTransaction(
+            config.databaseName,
+            async (client) => {
+                const result = await client.query(
+                    "INSERT INTO products (name, price, stock) VALUES ($1, $2, $3) RETURNING id",
+                    ["QueryMind Transaction Test", 10.0, 5],
+                );
 
-            console.log("Inserted test ID:", result.rows[0].id);
+                console.log("Inserted test ID:", result.rows[0].id);
 
-            throw new Error("Intentional rollback test");
-        });
+                throw new Error("Intentional rollback test");
+            },
+        );
     } catch (error) {
         if (
             error instanceof Error &&

@@ -1,12 +1,16 @@
 import type { ApprovalStore } from "./approval.store.js";
-import type { SqlValidator } from "../query/sql-validator.js";
+import type { WriteSqlValidator } from "../query/write-sql-validator.js";
 import type { SqlOperationClassifier } from "../query/sql-operation-classifier.js";
+import type { DatabaseService } from "../database/database.service.js";
+import { CommitOutcomeUnknownError } from "../database/database.service.js";
+import type { OperationExecutionResult } from "./approval.types.js";
 
 export class OperationExecutionService {
     constructor(
         private readonly approvalStore: ApprovalStore,
-        private readonly validator: SqlValidator,
+        private readonly validator: WriteSqlValidator,
         private readonly classifier: SqlOperationClassifier,
+        private readonly databaseService: DatabaseService,
     ) {}
 
     prepareExecution(approvalId: string) {
@@ -58,6 +62,46 @@ export class OperationExecutionService {
             sql: request.sql,
             operation: request.operation,
             database: request.database,
+        };
+    }
+
+    async executeOperation(
+        approvalId: string,
+    ): Promise<OperationExecutionResult> {
+        const execution = this.prepareExecution(approvalId);
+
+        let affectedRows: number;
+
+        try {
+            affectedRows = await this.databaseService.withWriteTransaction(
+                execution.database,
+                async (client) => {
+                    const result = await client.query(execution.sql);
+
+                    return result.rowCount ?? 0;
+                },
+            );
+        } catch (error) {
+            if (error instanceof CommitOutcomeUnknownError) {
+                this.approvalStore.updateStatus(
+                    approvalId,
+                    "execution_unknown",
+                );
+            } else {
+                this.approvalStore.updateStatus(approvalId, "failed");
+            }
+
+            throw error;
+        }
+
+        this.approvalStore.updateStatus(approvalId, "executed");
+
+        return {
+            approvalId: execution.approvalId,
+            operation: execution.operation,
+            database: execution.database,
+            affectedRows,
+            status: "executed",
         };
     }
 }

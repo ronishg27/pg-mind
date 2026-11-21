@@ -69,6 +69,7 @@ export class DatabaseService {
     }
 
     async withWriteTransaction<T>(
+        expectedDatabase: string,
         callback: (client: PoolClient) => Promise<T>,
     ): Promise<T> {
         if (!this.writePool) {
@@ -77,15 +78,50 @@ export class DatabaseService {
 
         const client = await this.writePool.connect();
 
+        let commitAttempted = false;
+        let releaseError: Error | undefined;
+
         try {
             await client.query("BEGIN");
+
+            // Verify the writer connection before executing anything.
+            const identityResult = await client.query<{
+                database: string;
+                role: string;
+            }>(
+                `SELECT 
+                    current_database() AS database, 
+                    current_user AS role
+                `,
+            );
+
+            const identity = identityResult.rows[0];
+
+            // TODO: Do not hardcode the role name. Instead, fetch it from a configuration or environment variable.
+            if (
+                identity?.database !== expectedDatabase ||
+                identity?.role !== "querymind_writer"
+            ) {
+                throw new Error(
+                    `Writer connection identity mismatch. Expected database: ${expectedDatabase}, role: querymind_writer. Got database: ${identity?.database}, role: ${identity?.role}`,
+                );
+            }
 
             // Cancel queries that exceed 10 seconds.
             await client.query("SET LOCAL statement_timeout = '10s'");
 
             const result = await callback(client);
 
-            await client.query("COMMIT");
+            // From this point onward, a failed COMMIT has an uncertain outcome.
+            commitAttempted = true;
+
+            try {
+                await client.query("COMMIT");
+            } catch (error) {
+                releaseError =
+                    error instanceof Error ? error : new Error(String(error));
+                throw new CommitOutcomeUnknownError(releaseError);
+            }
             return result;
         } catch (error) {
             try {
@@ -95,9 +131,20 @@ export class DatabaseService {
             }
             throw error;
         } finally {
-            client.release();
+            client.release(releaseError);
         }
     }
 }
 // Using Pool instead of Client
 // Because Pool manages multiple clients and handles connection pooling, it is more efficient for applications that require multiple database connections. The Pool class allows you to reuse connections, reducing the overhead of establishing new connections for each query.
+
+export class CommitOutcomeUnknownError extends Error {
+    constructor(cause: unknown) {
+        super(
+            "The COMMIT result is unknown. The operation may have been committed.",
+            { cause },
+        );
+
+        this.name = "CommitOutcomeUnknownError";
+    }
+}
