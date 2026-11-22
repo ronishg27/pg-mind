@@ -1,6 +1,6 @@
 # PostgreSQL Read-Only User Setup Guide
 
-This guide explains how to create a dedicated PostgreSQL login role for an application such as QueryMind, grant it read-only access to a database, and verify that the permissions work.
+This guide explains how to create a dedicated PostgreSQL login role for an application such as PGMind, grant it read-only access to a database, and verify that the permissions work.
 
 The examples use:
 
@@ -227,7 +227,7 @@ Expected result: `CREATE TABLE` fails with a permission error because the role d
 
 ## 8. Configure the application connection
 
-For QueryMind, set `QUERY_DATABASE_URL` to the read-only account and the intended database:
+For PGMind, set `QUERY_DATABASE_URL` to the read-only account and the intended database:
 
 ```dotenv
 QUERY_DATABASE_URL=postgresql://querymind_readonly:YOUR_PASSWORD@localhost:5432/supergen
@@ -235,9 +235,9 @@ QUERY_DATABASE_URL=postgresql://querymind_readonly:YOUR_PASSWORD@localhost:5432/
 
 Use the correct host and port for your PostgreSQL server. If the password contains URL-reserved characters (for example `@`, `:`, `/`, `?`, `#`, or `%`), URL-encode the password in the connection string.
 
-Keep administrative or write-capable credentials separate. QueryMind's query-execution connection should use `QUERY_DATABASE_URL`, not an owner or administrator account.
+Keep administrative or write-capable credentials separate. PGMind's query-execution connection should use `QUERY_DATABASE_URL`, not an owner or administrator account.
 
-After changing `.env`, restart the QueryMind MCP server and the OpenCode session that launched it. An already-running process and connection pool will continue using the connection settings it loaded at startup.
+After changing `.env`, restart the PGMind MCP server and the OpenCode session that launched it. An already-running process and connection pool will continue using the connection settings it loaded at startup.
 
 ## 9. Troubleshooting
 

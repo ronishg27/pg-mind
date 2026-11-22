@@ -1,9 +1,9 @@
-# QueryMind Architecture
+# PGMind Architecture
 
-QueryMind is a **modular TypeScript monolith** — a single deployable application with separated concerns. It does not contain its own LLM. The MCP client (e.g., OpenCode) provides the AI agent, while QueryMind provides database capabilities and execution safeguards.
+PGMind is a **modular TypeScript monolith** — a single deployable application with separated concerns. It does not contain its own LLM. The MCP client (e.g., OpenCode) provides the AI agent, while PGMind provides database capabilities and execution safeguards.
 
 ```
-User → OpenCode LLM → QueryMind MCP Server → QueryMind Services → PostgreSQL.
+User → OpenCode LLM → PGMind MCP Server → PGMind Services → PostgreSQL.
 ```
 
 ## Module Layout
@@ -26,7 +26,7 @@ MCP tools are registered in `src/index.ts`. Business logic lives in the services
 
 ## Two Database Execution Paths
 
-QueryMind has two distinct database execution paths:
+PGMind has two distinct database execution paths:
 
 ### A. Read-only execution path
 
@@ -55,17 +55,17 @@ The workflow is:
 1. The user requests a database modification.
 2. The LLM generates SQL.
 3. The LLM calls `prepare_operation`.
-4. QueryMind classifies the SQL (`SqlOperationClassifier`).
-5. QueryMind creates an approval request (`ApprovalStore`).
+4. PGMind classifies the SQL (`SqlOperationClassifier`).
+5. PGMind creates an approval request (`ApprovalStore`).
 6. The MCP elicitation mechanism presents the complete SQL and operation summary to the human (`McpApprovalConfirmationProvider`).
 7. The human explicitly approves, rejects, or cancels.
-8. If approved, QueryMind stores the approved request (`approved` status).
+8. If approved, PGMind stores the approved request (`approved` status).
 9. The LLM can subsequently call `execute_approved_operation` with the approval ID.
-10. QueryMind validates the stored SQL again (`WriteSqlValidator`).
-11. QueryMind claims the approval request for execution (`approved` → `executing`).
-12. QueryMind verifies the writer connection (database + role identity).
-13. QueryMind executes the exact stored SQL in a transaction.
-14. QueryMind records the final execution status and affected row count.
+10. PGMind validates the stored SQL again (`WriteSqlValidator`).
+11. PGMind claims the approval request for execution (`approved` → `executing`).
+12. PGMind verifies the writer connection (database + role identity).
+13. PGMind executes the exact stored SQL in a transaction.
+14. PGMind records the final execution status and affected row count.
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
@@ -146,11 +146,11 @@ The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults t
 
 ## Commit Outcome Handling
 
-`CommitOutcomeUnknownError` is thrown when the COMMIT request fails. A failed COMMIT does **not** necessarily mean the transaction was rolled back — the database may already have committed it. The connection client is discarded from the pool rather than returned for reuse. QueryMind therefore marks the execution as `execution_unknown` rather than assuming failure or retrying automatically. An unknown commit outcome means the operation may or may not have been applied. Manual database-state verification is required before any new attempt, and retrying blindly could cause duplicate effects.
+`CommitOutcomeUnknownError` is thrown when the COMMIT request fails. A failed COMMIT does **not** necessarily mean the transaction was rolled back — the database may already have committed it. The connection client is discarded from the pool rather than returned for reuse. PGMind therefore marks the execution as `execution_unknown` rather than assuming failure or retrying automatically. An unknown commit outcome means the operation may or may not have been applied. Manual database-state verification is required before any new attempt, and retrying blindly could cause duplicate effects.
 
 ## SQL Validation and Classification
 
-QueryMind separates SQL validation and classification into distinct components:
+PGMind separates SQL validation and classification into distinct components:
 
 - **`SqlValidator`** — protects the read-only execution path. Allows only SELECT and WITH statements; rejects disallowed statement types, disallowed functions, SELECT FOR UPDATE/SHARE, and SELECT INTO. Exactly one statement required. Max 50,000 characters.
 - **`SqlOperationClassifier`** — classifies SQL into operations (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE, OTHER) and categories (read, write, unknown), with an `requiresApproval` flag. Handles direct statements, WITH statements, data-modifying CTEs, and nested CTEs. Rejects multiple statements, invalid syntax, and unsupported SQL (e.g., EXPLAIN).
@@ -178,7 +178,7 @@ Five tools are registered in `src/index.ts`:
 
 | Tool | Input | Output | Modifies DB? |
 |------|-------|--------|--------------|
-| `ping` | `{ message?: string }` | Text: `"QueryMind is running. Pong!"` or echo | No |
+| `ping` | `{ message?: string }` | Text: `"PGMind is running. Pong!"` or echo | No |
 | `execute_query` | `{ sql: string }` (1–50,000 chars) | JSON `QueryResult` (columns, rows, rowCount, truncated) | No |
 | `get_database_schema` | `{}` | JSON schema (schemas, tables, columns, constraints) | No |
 | `prepare_operation` | `{ sql: string }` (1–50,000 chars) | JSON `{ id, status, message }` | No (stores approval only) |

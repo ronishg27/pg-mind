@@ -137,7 +137,7 @@ describe("McpApprovalConfirmationProvider", () => {
 
         const params = elicitInput.mock.calls[0][0] as ElicitParams;
 
-        expect(params.message).toContain("QueryMind — Approval Required");
+        expect(params.message).toContain("PGMind — Approval Required");
         expect(params.message).toContain("🟡 MODERATE RISK  ·  UPDATE");
         expect(params.message).toContain(
             "Modifies existing records. Verify that the conditions target the intended records.",

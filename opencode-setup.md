@@ -3,10 +3,10 @@
     "$schema": "https://opencode.ai/config.json",
     "mcp": {
         "servers": {
-            "querymind": {
+            "pgmind": {
                 "type": "local",
                 "command": ["node", "dist/index.js"],
-                "cwd": "path-to-querymind",
+                "cwd": "path-to-pgmind",
                 "codemode": false
             }
         }

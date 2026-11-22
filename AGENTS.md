@@ -17,9 +17,9 @@ Instructions for AI coding agents working in this repository.
 
 ## Project overview
 
-QueryMind is a **TypeScript-only MCP (Model Context Protocol) server** that connects to PostgreSQL, understands its schema, validates SQL for safety, executes read-only queries, and supports write operations behind explicit human approval. It exposes schema introspection, query execution, and write-operation management as MCP tools.
+PGMind is a **TypeScript-only MCP (Model Context Protocol) server** that connects to PostgreSQL, understands its schema, validates SQL for safety, executes read-only queries, and supports write operations behind explicit human approval. It exposes schema introspection, query execution, and write-operation management as MCP tools.
 
-The architecture is a **modular TypeScript monolith** — business logic lives in independent services under `src/modules/` (`database`, `schema`, `query`, `approval`), not inside MCP tool handlers. QueryMind does **not** contain its own LLM; the MCP client provides the AI agent.
+The architecture is a **modular TypeScript monolith** — business logic lives in independent services under `src/modules/` (`database`, `schema`, `query`, `approval`), not inside MCP tool handlers. PGMind does **not** contain its own LLM; the MCP client provides the AI agent.
 
 **Two database connection pools:**
 - Read pool (`QUERY_DATABASE_URL`, required) — role `querymind_readonly`, read-only queries only.
@@ -32,7 +32,7 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 - Copy `.env.example` to `.env` (`.env` is gitignored). The app loads it automatically via `process.loadEnvFile(".env")` in `src/index.ts` and `src/config/index.ts`.
 - Restart the MCP server after changing `.env`; the connection pool is created at startup.
 - Start infrastructure: `docker compose up -d`. The file is `docker-compose.yaml` and defines only `postgres` (no Ollama); it maps host **5433 → container 5432**. The local `.env` uses `localhost:5433`; `.env.example` shows 5432 — match your actual running port.
-- To run QueryMind as an MCP server: `pnpm build`, then `node dist/index.js` (see `opencode-setup.md` for the OpenCode MCP server config pointing at `dist/index.js`).
+- To run PGMind as an MCP server: `pnpm build`, then `node dist/index.js` (see `opencode-setup.md` for the OpenCode MCP server config pointing at `dist/index.js`).
 
 ## Tests
 

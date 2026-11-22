@@ -1,6 +1,6 @@
-# QueryMind Security Model
+# PGMind Security Model
 
-QueryMind uses a **defense-in-depth** approach. No single layer is relied upon as the complete security boundary. Application-level SQL validation complements — but does not replace — database-level role permissions.
+PGMind uses a **defense-in-depth** approach. No single layer is relied upon as the complete security boundary. Application-level SQL validation complements — but does not replace — database-level role permissions.
 
 ## Defense-in-Depth Layers
 
@@ -34,7 +34,7 @@ QueryMind uses a **defense-in-depth** approach. No single layer is relied upon a
 
 ## Limitations
 
-QueryMind is **not** completely secure. Do not assume that every SQL injection or malicious SQL scenario is prevented. Specific limitations:
+PGMind is **not** completely secure. Do not assume that every SQL injection or malicious SQL scenario is prevented. Specific limitations:
 
 - **SQL validation is not a complete SQL sandbox.** AST-based validation reduces risk but cannot catch every dangerous construct or side effect.
 - **The dangerous-function list is not exhaustive.** Both validators maintain a set of disallowed PostgreSQL functions, but the list may not cover every function with side effects.
@@ -50,6 +50,6 @@ QueryMind is **not** completely secure. Do not assume that every SQL injection o
 
 ## Trust Boundaries
 
-- QueryMind trusts the MCP client to authenticate the end user. QueryMind itself has no authentication or authorization layer.
-- QueryMind trusts that the PostgreSQL roles are configured with the least privilege described in `docs/database-setup.md`.
+- PGMind trusts the MCP client to authenticate the end user. PGMind itself has no authentication or authorization layer.
+- PGMind trusts that the PostgreSQL roles are configured with the least privilege described in `docs/database-setup.md`.
 - Human approval is the trust boundary for write operations. The human reviewer must read the complete SQL statement presented in the elicitation prompt before approving.

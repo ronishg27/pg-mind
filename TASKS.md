@@ -1,8 +1,8 @@
-# QueryMind — Development Tasks
+# PGMind — Development Tasks
 
 Roadmap broken into milestones. Follow the project rule: **understand → implement → run → test → review → proceed**.
 
-> **Status note:** This document tracks planned and completed work. Milestones 1–3 and the write-operation milestone are complete. Milestones 4–5 (AI integration via Ollama, query explanation/EXPLAIN) are **not implemented**. SQL is supplied by the MCP client/LLM; QueryMind validates and executes it. Write operations support INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE); arbitrary SQL and arbitrary DDL are not supported.
+> **Status note:** This document tracks planned and completed work. Milestones 1–3 and the write-operation milestone are complete. Milestones 4–5 (AI integration via Ollama, query explanation/EXPLAIN) are **not implemented**. SQL is supplied by the MCP client/LLM; PGMind validates and executes it. Write operations support INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE); arbitrary SQL and arbitrary DDL are not supported.
 
 ## Milestone 1 — Foundation ✅ Complete
 
@@ -84,7 +84,7 @@ Roadmap broken into milestones. Follow the project rule: **understand → implem
 - [ ] Wire AI layer into the query execution pipeline
 - [ ] Expose NL-to-SQL as an MCP tool
 
-**Status:** Not implemented. SQL is supplied by the MCP client/LLM; QueryMind does not generate SQL.
+**Status:** Not implemented. SQL is supplied by the MCP client/LLM; PGMind does not generate SQL.
 
 ## Milestone 5 — Database Intelligence ❌ Not Implemented
 

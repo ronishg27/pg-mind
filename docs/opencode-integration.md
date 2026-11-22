@@ -1,8 +1,8 @@
 # OpenCode MCP Integration
 
-QueryMind runs as a local MCP server over stdio. OpenCode connects to it as an MCP server and invokes its tools through the LLM.
+PGMind runs as a local MCP server over stdio. OpenCode connects to it as an MCP server and invokes its tools through the LLM.
 
-## 1. Build QueryMind
+## 1. Build PGMind
 
 ```bash
 pnpm install
@@ -35,17 +35,17 @@ The app loads `.env` automatically via `process.loadEnvFile(".env")` at startup.
 
 ## 3. Register in OpenCode
 
-Add QueryMind to your OpenCode MCP server configuration (`~/.opencode/config.json` or the workspace-level MCP config):
+Add PGMind to your OpenCode MCP server configuration (`~/.opencode/config.json` or the workspace-level MCP config):
 
 ```json
 {
     "$schema": "https://opencode.ai/config.json",
     "mcp": {
         "servers": {
-            "querymind": {
+            "pgmind": {
                 "type": "local",
                 "command": ["node", "dist/index.js"],
-                "cwd": "path-to-querymind",
+                "cwd": "path-to-pgmind",
                 "codemode": false
             }
         }
@@ -53,7 +53,7 @@ Add QueryMind to your OpenCode MCP server configuration (`~/.opencode/config.jso
 }
 ```
 
-Replace `path-to-querymind` with the absolute path to the QueryMind repository working directory. The `cwd` matters because `src/index.ts` loads `.env` relative to the working directory.
+Replace `path-to-pgmind` with the absolute path to the PGMind repository working directory. The `cwd` matters because `src/index.ts` loads `.env` relative to the working directory.
 
 See also `opencode-setup.md` for the config snippet.
 
@@ -65,13 +65,13 @@ Start PostgreSQL:
 docker compose up -d
 ```
 
-Start QueryMind:
+Start PGMind:
 
 ```bash
 pnpm start
 ```
 
-The server runs on stdio and logs `"QueryMind MCP server is running. Waiting for requests..."` to stderr.
+The server runs on stdio and logs `"PGMind MCP server is running. Waiting for requests..."` to stderr.
 
 ## 5. Verify MCP Connectivity
 
@@ -81,7 +81,7 @@ Use the `ping` tool to confirm the server is reachable:
 ping(message: "hello")
 ```
 
-Expected response: `"QueryMind is running. Message Received: hello"`.
+Expected response: `"PGMind is running. Message Received: hello"`.
 
 Without a message:
 
@@ -89,11 +89,11 @@ Without a message:
 ping()
 ```
 
-Expected response: `"QueryMind is running. Pong!"`.
+Expected response: `"PGMind is running. Pong!"`.
 
 ## 6. Inspect Available Tools
 
-QueryMind registers five MCP tools:
+PGMind registers five MCP tools:
 
 | Tool | Input | Purpose |
 |------|-------|---------|
@@ -117,7 +117,7 @@ The LLM (or user) calls `prepare_operation` with an UPDATE statement:
 prepare_operation(sql: "UPDATE products SET price = 500 WHERE id = 1")
 ```
 
-QueryMind classifies the SQL, creates a pending approval request, and presents the MCP elicitation prompt. The tool returns:
+PGMind classifies the SQL, creates a pending approval request, and presents the MCP elicitation prompt. The tool returns:
 
 ```json
 {
@@ -141,7 +141,7 @@ The human reviews the complete SQL statement and the operation summary. Approve 
 
 ### Step 3: Approve the Operation
 
-The human chooses **Approve** in the elicitation prompt. QueryMind transitions the request to `approved`. The tool returns:
+The human chooses **Approve** in the elicitation prompt. PGMind transitions the request to `approved`. The tool returns:
 
 ```json
 {
@@ -161,7 +161,7 @@ The LLM calls `execute_approved_operation` with the returned approval ID:
 execute_approved_operation(approvalId: "<uuid>")
 ```
 
-QueryMind re-validates the stored SQL, claims the approval (single-use), verifies the writer connection (`current_database()` + `current_user === "querymind_writer"`), executes the exact stored SQL in a transaction, and records the result:
+PGMind re-validates the stored SQL, claims the approval (single-use), verifies the writer connection (`current_database()` + `current_user === "querymind_writer"`), executes the exact stored SQL in a transaction, and records the result:
 
 ```json
 {
@@ -196,8 +196,8 @@ This is **rejected** because the approval is already in `executed` status (singl
 
 ## Working Directory
 
-The MCP server's `cwd` must be the QueryMind repository root so that `.env` is found by `process.loadEnvFile(".env")`. If you move the server or run it from another directory, environment variables will not load and the server will fail to start.
+The MCP server's `cwd` must be the PGMind repository root so that `.env` is found by `process.loadEnvFile(".env")`. If you move the server or run it from another directory, environment variables will not load and the server will fail to start.
 
-## No AI/LLM Inside QueryMind
+## No AI/LLM Inside PGMind
 
-QueryMind does not contain its own LLM. OpenCode provides the AI agent. QueryMind exposes database capabilities (schema, read query, approved write) as MCP tools for the LLM to invoke.
+PGMind does not contain its own LLM. OpenCode provides the AI agent. PGMind exposes database capabilities (schema, read query, approved write) as MCP tools for the LLM to invoke.

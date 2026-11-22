@@ -1,14 +1,14 @@
-# QueryMind
+# PGMind
 
-QueryMind is a **TypeScript-only MCP (Model Context Protocol) server** that connects to PostgreSQL, understands its schema, validates SQL for safety, executes read-only queries, and supports write operations behind explicit human approval. It exposes schema introspection, query execution, and write-operation management as MCP tools.
+PGMind is a **TypeScript-only MCP (Model Context Protocol) server** that connects to PostgreSQL, understands its schema, validates SQL for safety, executes read-only queries, and supports write operations behind explicit human approval. It exposes schema introspection, query execution, and write-operation management as MCP tools.
 
 The general architecture is:
 
 ```
-User → OpenCode LLM → QueryMind MCP Server → QueryMind Services → PostgreSQL.
+User → OpenCode LLM → PGMind MCP Server → PGMind Services → PostgreSQL.
 ```
 
-QueryMind does **not** contain its own LLM. The MCP client provides the AI agent, while QueryMind provides database capabilities and execution safeguards.
+PGMind does **not** contain its own LLM. The MCP client provides the AI agent, while PGMind provides database capabilities and execution safeguards.
 
 ## Features
 
@@ -27,13 +27,13 @@ QueryMind does **not** contain its own LLM. The MCP client provides the AI agent
 
 ## Architecture
 
-QueryMind is a **modular TypeScript monolith**. Business logic lives in independent services under `src/modules/` (`database`, `schema`, `query`, `approval`), not inside MCP tool handlers.
+PGMind is a **modular TypeScript monolith**. Business logic lives in independent services under `src/modules/` (`database`, `schema`, `query`, `approval`), not inside MCP tool handlers.
 
 ```
 MCP Client (OpenCode / other)
         │ MCP protocol (stdio)
         ▼
-QueryMind TypeScript Application (src/index.ts)
+PGMind TypeScript Application (src/index.ts)
 ├── MCP tools: ping, execute_query, get_database_schema,
 │   prepare_operation, execute_approved_operation
 ├── Services: database, schema, query, approval

@@ -29,7 +29,7 @@ async function main() {
             async (client) => {
                 const result = await client.query(
                     "INSERT INTO products (name, price, stock) VALUES ($1, $2, $3) RETURNING id",
-                    ["QueryMind Transaction Test", 10.0, 5],
+                    ["PGMind Transaction Test", 10.0, 5],
                 );
 
                 console.log("Inserted test ID:", result.rows[0].id);

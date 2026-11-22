@@ -31,7 +31,7 @@ const queryService = new QueryService(database, validator);
 const schemaService = new SchemaService(database);
 
 const server = new McpServer({
-    name: "querymind",
+    name: "pgmind",
     version: "1.0.0",
 });
 
@@ -69,7 +69,7 @@ const operationExecutionWorkflow = new OperationExecutionWorkflowService(
 server.registerTool(
     "ping",
     {
-        description: "Check whether the QueryMind MCP server is running.",
+        description: "Check whether the PGMind MCP server is running.",
         inputSchema: z.object({
             message: z.string().optional(),
         }),
@@ -79,8 +79,8 @@ server.registerTool(
             {
                 type: "text",
                 text: message
-                    ? `QueryMind is running. Message Received: ${message}`
-                    : "QueryMind is running. Pong!",
+                    ? `PGMind is running. Message Received: ${message}`
+                    : "PGMind is running. Pong!",
             },
         ],
     }),
@@ -247,7 +247,7 @@ async function main() {
         await server.connect(transport);
 
         console.error(
-            "QueryMind MCP server is running. Waiting for requests...",
+            "PGMind MCP server is running. Waiting for requests...",
         );
     } catch (error) {
         await database.close();
@@ -262,7 +262,7 @@ async function shutdown() {
         return;
     }
     isShuttingDown = true;
-    console.error("Shutting down QueryMind MCP server...");
+    console.error("Shutting down PGMind MCP server...");
     try {
         await server.close();
     } catch (error) {
@@ -283,7 +283,7 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 main().catch(async (err) => {
-    console.error("Error starting QueryMind MCP server:", err);
+    console.error("Error starting PGMind MCP server:", err);
     await database.close();
     process.exit(1);
 });

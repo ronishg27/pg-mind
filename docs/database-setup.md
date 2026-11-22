@@ -1,6 +1,6 @@
 # PostgreSQL Setup and Role Permissions
 
-QueryMind uses three PostgreSQL roles with distinct responsibilities:
+PGMind uses three PostgreSQL roles with distinct responsibilities:
 
 | Role | Responsibility |
 |------|----------------|
@@ -151,7 +151,7 @@ Expected values:
 | `querymind_readonly` | `querymind_dev` | `querymind_readonly` |
 | `querymind_writer` | `querymind_dev` | `querymind_writer` |
 
-QueryMind's `withWriteTransaction` verifies at runtime that the writer connection's `current_database()` matches the approval request's database and that `current_user` matches the configured `writeRoleName` (default `querymind_writer`, overridable via `WRITE_ROLE_NAME`). A mismatch aborts the operation.
+PGMind's `withWriteTransaction` verifies at runtime that the writer connection's `current_database()` matches the approval request's database and that `current_user` matches the configured `writeRoleName` (default `querymind_writer`, overridable via `WRITE_ROLE_NAME`). A mismatch aborts the operation.
 
 ## Known limitations
 

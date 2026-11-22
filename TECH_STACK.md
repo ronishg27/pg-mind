@@ -1,8 +1,8 @@
-# QueryMind — Technical Stack
+# PGMind — Technical Stack
 
 ## Decision Summary
 
-QueryMind is a **TypeScript-only** project. Go and gRPC have been removed entirely. The architecture is a modular TypeScript monolith — no separate microservices.
+PGMind is a **TypeScript-only** project. Go and gRPC have been removed entirely. The architecture is a modular TypeScript monolith — no separate microservices.
 
 ## Stack Overview
 
@@ -13,19 +13,19 @@ QueryMind is a **TypeScript-only** project. Go and gRPC have been removed entire
 | Package manager | pnpm | Fast, disk-efficient installs |
 | MCP server | Official MCP TypeScript SDK (`@modelcontextprotocol/sdk`, ^1.32.2) | Canonical MCP implementation, stdio transport |
 | Backend architecture | Modular TypeScript application | Monolith with separated concerns; easy to test and extend |
-| Database | PostgreSQL | Target database for QueryMind |
+| Database | PostgreSQL | Target database for PGMind |
 | Database access | `pg` (node-postgres, ^8.23.1) | Native driver, direct control over SQL execution and introspection (no ORM) |
 | SQL parsing | `pgsql-ast-parser` (^12.0.2) | PostgreSQL-aware AST parser; safety is more complex than "starts with SELECT" |
 | Validation | Zod (^4.6.7) | TypeScript-first schema validation for structured inputs/outputs |
 | Testing | Vitest (^5.1.1) | Fast, TypeScript-native test runner; tests colocated at `src/**/*.test.ts` |
 | Containerization | Docker Compose | PostgreSQL only (`docker-compose.yaml`) |
 
-**Not part of the current implementation:** Ollama / AI integration, natural language → SQL, query explanation (EXPLAIN). SQL is supplied by the MCP client/LLM; QueryMind validates and executes it.
+**Not part of the current implementation:** Ollama / AI integration, natural language → SQL, query explanation (EXPLAIN). SQL is supplied by the MCP client/LLM; PGMind validates and executes it.
 
 ## Repository Structure (Modular Monolith)
 
 ```
-querymind/
+pgmind/
 ├── src/
 │   ├── index.ts                # MCP server entry point; registers all 5 tools
 │   ├── config/index.ts         # Environment configuration

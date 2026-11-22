@@ -1,6 +1,6 @@
 # Approval Workflow
 
-QueryMind's write operations are gated behind explicit human approval. Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). Approval and execution are separate steps:
+PGMind's write operations are gated behind explicit human approval. Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). Approval and execution are separate steps:
 
 - **Approval** authorizes a specific SQL statement for later execution. It does **not** execute SQL.
 - **Execution** runs the approved SQL against the database, but only with a valid approval ID.

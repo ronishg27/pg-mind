@@ -83,7 +83,7 @@ function buildMessage(input: ApprovalConfirmationInput): string {
     const label = SEVERITY_LABEL[info.severity];
 
     return [
-        "QueryMind — Approval Required",
+        "PGMind — Approval Required",
         "────────────────────────────────────────────────────────",
         "",
         `${emoji} ${label}  ·  ${request.operation}`,
