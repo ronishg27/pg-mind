@@ -6,7 +6,7 @@ QueryMind uses three PostgreSQL roles with distinct responsibilities:
 |------|----------------|
 | `querymind` | Development / database owner role (used by Docker Compose as the initial superuser of the `querymind_dev` database) |
 | `querymind_readonly` | Read-only database access (schema discovery, SELECT queries) |
-| `querymind_writer` | Restricted DML execution (approved INSERT, UPDATE, DELETE only) |
+| `querymind_writer` | Restricted execution (approved DML and allowlisted DDL operations) |
 
 ## querymind_readonly — Read-Only Role
 
@@ -75,17 +75,30 @@ The writer role should have:
 - DML permissions: `INSERT`, `UPDATE`, `DELETE` on the target tables.
 - Sequence permissions: `USAGE` and `UPDATE` on sequences (needed for `SERIAL`/`IDENTITY` columns when `RETURNING` is used).
 
+Additional DDL privileges are **not** granted by default. They should only be added when a specific allowlisted DDL operation is intentionally required.
+
 ### What the writer role must NOT receive
 
 - Broad database-owner privileges.
 - Superuser privileges.
-- `CREATE`, `ALTER`, `DROP`, `TRUNCATE` on schemas or tables (DDL).
+- Unrestricted DDL privileges on schemas or tables.
 
-The writer role must not receive broad database-owner or superuser privileges merely to make write operations work. Database-level role permissions remain the primary enforcement boundary.
+The writer role must not receive broad database-owner or superuser privileges merely to make write operations work. Additional DDL privileges or object ownership should only be introduced when the corresponding allowlisted DDL operations are intentionally required. Database-level role permissions remain the primary enforcement boundary.
 
 ### Supported operations
 
-The current execution implementation supports **INSERT, UPDATE, and DELETE** only through the approval workflow. Although `SqlOperationClassifier` recognizes CREATE, ALTER, DROP, and TRUNCATE operations, those are **not** executable through the approval workflow because `WriteSqlValidator` rejects them. DDL requires a separate permission and ownership design and is not part of the current implementation.
+The execution service allows INSERT, UPDATE, DELETE, and a limited, explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE) through the approval workflow.
+
+Application validation accepts only specific AST statement types: `create table`, `create index`, `create schema`, `create view`, `alter table`, `alter index`, `drop table`, `drop index`, and `truncate table`, together with the DML types `insert`, `update`, and `delete`. This is **not** unrestricted SQL or unrestricted DDL. Operations such as `DROP SCHEMA`, `DROP VIEW`, `CREATE TYPE`, `CREATE FUNCTION`, `ALTER SEQUENCE`, and `DROP TYPE` are rejected by `WriteSqlValidator`.
+
+Whether a supported operation actually succeeds depends on the PostgreSQL privileges and ownership assigned to `querymind_writer` (or the role configured via `WRITE_ROLE_NAME`):
+
+- `CREATE TABLE` requires `CREATE` privilege on the target schema.
+- `ALTER` and `DROP` operations generally depend on ownership of the affected object.
+- `TRUNCATE` requires the appropriate privilege or ownership.
+- `CREATE SCHEMA` requires `CREATE` privilege on the database.
+
+PostgreSQL does not provide generic `ALTER` or `DROP` privileges that can be granted independently; object ownership is the controlling factor for most ALTER and DROP operations.
 
 ### Example grants
 
@@ -106,6 +119,8 @@ GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO querymind_writer;
 GRANT USAGE, UPDATE ON ALL SEQUENCES IN SCHEMA public TO querymind_writer;
 ```
 
+These example grants cover DML only. DDL privileges are intentionally **not** included. Add `CREATE` on a schema (for `CREATE TABLE`), object ownership (for `ALTER`/`DROP`), or database-level `CREATE` (for `CREATE SCHEMA`) only when the corresponding DDL operation is explicitly required.
+
 ## Connection Strings
 
 Configure in `.env`:
@@ -117,6 +132,8 @@ WRITE_DATABASE_URL=postgresql://querymind_writer:your_password@localhost:5433/qu
 
 - `QUERY_DATABASE_URL` is **required**. The server will not start without it.
 - `WRITE_DATABASE_URL` is **optional**. Omit it if you only need read-only access.
+
+The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults to `querymind_writer`. The writer connection identity is verified at runtime in `withWriteTransaction`, so the configured role name must match the actual PostgreSQL role used by `WRITE_DATABASE_URL`.
 
 ## Verification
 
@@ -134,7 +151,15 @@ Expected values:
 | `querymind_readonly` | `querymind_dev` | `querymind_readonly` |
 | `querymind_writer` | `querymind_dev` | `querymind_writer` |
 
-QueryMind's `withWriteTransaction` verifies at runtime that the writer connection's `current_database()` matches the approval request's database and that `current_user` is `querymind_writer`. A mismatch aborts the operation.
+QueryMind's `withWriteTransaction` verifies at runtime that the writer connection's `current_database()` matches the approval request's database and that `current_user` matches the configured `writeRoleName` (default `querymind_writer`, overridable via `WRITE_ROLE_NAME`). A mismatch aborts the operation.
+
+## Known limitations
+
+The following DDL behaviors are important to understand before granting writer privileges:
+
+- **`CREATE SCHEMA` passes application validation but currently fails** when executed with the default `querymind_writer` role, because that role lacks database-level `CREATE` permission. Grant `CREATE` on the database only if schema creation is explicitly required.
+- **`CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY` are rejected** by `WriteSqlValidator` because they cannot run inside a transaction, and the execution workflow always runs write operations in a transaction.
+- **Unsupported DDL must not be presented as supported.** `DROP SCHEMA`, `DROP VIEW`, `CREATE TYPE`, `CREATE FUNCTION`, `ALTER SEQUENCE`, and `DROP TYPE` are rejected by `WriteSqlValidator` and are not in the execution allowlist. Not every DDL operation has been live-tested against PostgreSQL.
 
 ## Relationship to Other Docs
 

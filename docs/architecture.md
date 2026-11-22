@@ -119,9 +119,11 @@ Key constraints:
 | Pool | Env var | Required? | Role | Purpose |
 |------|---------|-----------|------|---------|
 | Read pool | `QUERY_DATABASE_URL` | Yes | `querymind_readonly` | Schema discovery, read-only queries, metadata |
-| Write pool | `WRITE_DATABASE_URL` | No | `querymind_writer` | Execute approved write operations |
+| Write pool | `WRITE_DATABASE_URL` | No | `writeRoleName` (default `querymind_writer`) | Execute approved write operations |
 
 The write pool is optional. If `WRITE_DATABASE_URL` is not configured, `DatabaseService` is created without a write pool, and any attempt to execute a write operation fails with `"Write pool is not configured"`.
+
+The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults to `querymind_writer`. The writer connection identity is verified at runtime in `withWriteTransaction`, so the configured role name must match the actual PostgreSQL role used by `WRITE_DATABASE_URL`.
 
 ### Read transaction (`withReadOnlyTransaction`)
 
@@ -135,18 +137,16 @@ The write pool is optional. If `WRITE_DATABASE_URL` is not configured, `Database
 
 - Requires the write pool; throws `"Write pool is not configured"` if absent.
 - `BEGIN`
-- Verify connection identity: `current_database()` must equal the expected database (from the approval request), and `current_user` must equal `querymind_writer`.
-
-  > **Known implementation detail:** The expected writer role name `querymind_writer` is currently hardcoded in `withWriteTransaction` (the code carries a TODO to fetch it from configuration/environment instead). The config module does expose a `writeRoleName` setting (default `querymind_writer`), but it is not yet wired into the identity check.
+- Verify connection identity: `current_database()` must equal the expected database (from the approval request), and `current_user` must equal the configured writer role (`writeRoleName`, default `querymind_writer`, overridable via `WRITE_ROLE_NAME`). A mismatch aborts the operation.
 - `SET LOCAL statement_timeout = '10s'`
 - Execute callback (the exact stored SQL)
 - `COMMIT` — from this point onward a failed COMMIT has an **uncertain outcome**. If COMMIT fails, a `CommitOutcomeUnknownError` is thrown rather than assuming rollback.
-- `ROLLBACK` on error (before COMMIT attempt)
-- Connection released in `finally`; `client.release(releaseError)` is used so a commit error is surfaced on release.
+- `ROLLBACK` on error (before COMMIT attempt). If ROLLBACK also fails, the connection client is discarded from the pool rather than returned for reuse, preventing an uncertain connection from being recycled. The original operation error is preserved and rethrown.
+- Connection released in `finally`; `client.release(releaseError)` is used so a commit or rollback error causes the client to be removed from the pool.
 
 ## Commit Outcome Handling
 
-`CommitOutcomeUnknownError` is thrown when the COMMIT request fails. A failed COMMIT does **not** necessarily mean the transaction was rolled back — the database may already have committed it. QueryMind therefore marks the execution as `execution_unknown` rather than assuming failure or retrying automatically. Manual database-state verification is required before any new attempt.
+`CommitOutcomeUnknownError` is thrown when the COMMIT request fails. A failed COMMIT does **not** necessarily mean the transaction was rolled back — the database may already have committed it. The connection client is discarded from the pool rather than returned for reuse. QueryMind therefore marks the execution as `execution_unknown` rather than assuming failure or retrying automatically. An unknown commit outcome means the operation may or may not have been applied. Manual database-state verification is required before any new attempt, and retrying blindly could cause duplicate effects.
 
 ## SQL Validation and Classification
 
@@ -154,7 +154,7 @@ QueryMind separates SQL validation and classification into distinct components:
 
 - **`SqlValidator`** — protects the read-only execution path. Allows only SELECT and WITH statements; rejects disallowed statement types, disallowed functions, SELECT FOR UPDATE/SHARE, and SELECT INTO. Exactly one statement required. Max 50,000 characters.
 - **`SqlOperationClassifier`** — classifies SQL into operations (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE, OTHER) and categories (read, write, unknown), with an `requiresApproval` flag. Handles direct statements, WITH statements, data-modifying CTEs, and nested CTEs. Rejects multiple statements, invalid syntax, and unsupported SQL (e.g., EXPLAIN).
-- **`WriteSqlValidator`** — a separate validator for the write execution path. Allows only INSERT, UPDATE, DELETE. Rejects data-modifying CTEs while allowing CTEs containing read-only SELECT statements. Rejects SELECT INTO/FOR UPDATE and disallowed functions.
+- **`WriteSqlValidator`** — a separate validator for the write execution path. Accepts INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL statement types (CREATE, ALTER, DROP, TRUNCATE). Rejects data-modifying CTEs while allowing CTEs containing read-only SELECT statements. Rejects SELECT INTO/FOR UPDATE and disallowed functions. Transaction-incompatible operations such as `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY` are rejected because they cannot run inside a transaction.
 
 Separate validators exist because the read-only and write paths have different security requirements. Merging them into one permissive validator would weaken the read-only path's guarantees.
 

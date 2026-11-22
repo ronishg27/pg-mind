@@ -2,7 +2,7 @@
 
 Roadmap broken into milestones. Follow the project rule: **understand → implement → run → test → review → proceed**.
 
-> **Status note:** This document tracks planned and completed work. Milestones 1–3 and the write-operation milestone are complete. Milestones 4–5 (AI integration via Ollama, query explanation/EXPLAIN) are **not implemented**. SQL is supplied by the MCP client/LLM; QueryMind validates and executes it.
+> **Status note:** This document tracks planned and completed work. Milestones 1–3 and the write-operation milestone are complete. Milestones 4–5 (AI integration via Ollama, query explanation/EXPLAIN) are **not implemented**. SQL is supplied by the MCP client/LLM; QueryMind validates and executes it. Write operations support INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE); arbitrary SQL and arbitrary DDL are not supported.
 
 ## Milestone 1 — Foundation ✅ Complete
 
@@ -56,10 +56,10 @@ Roadmap broken into milestones. Follow the project rule: **understand → implem
 
 ## Milestone: Human-Approved Write Operations ✅ Complete
 
-**Goal:** Write operations (INSERT, UPDATE, DELETE) behind explicit human approval.
+**Goal:** Write operations (INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations: CREATE, ALTER, DROP, TRUNCATE) behind explicit human approval.
 
 - [x] Create `src/modules/query/sql-operation-classifier.ts` (operation + category + requiresApproval)
-- [x] Create `src/modules/query/write-sql-validator.ts` (INSERT/UPDATE/DELETE only)
+- [x] Create `src/modules/query/write-sql-validator.ts` (INSERT/UPDATE/DELETE and allowlisted DDL types)
 - [x] Create `src/modules/approval/approval.store.ts` (in-memory Map, UUID, 5-min TTL, single-use claims)
 - [x] Create `src/modules/approval/approval.service.ts`
 - [x] Create `src/modules/approval/approval-workflow.service.ts`
@@ -68,8 +68,10 @@ Roadmap broken into milestones. Follow the project rule: **understand → implem
 - [x] Create `src/modules/approval/operation-execution.service.ts`
 - [x] Create `src/modules/approval/operation-execution-workflow.service.ts`
 - [x] Register `prepare_operation` and `execute_approved_operation` MCP tools
-- [x] Add `WRITE_DATABASE_URL` support and `querymind_writer` role verification
+- [x] Add `WRITE_DATABASE_URL` support, `WRITE_ROLE_NAME` configurable writer role (default `querymind_writer`), and runtime database/role verification
 - [x] Write unit tests for approval store, service, workflow, provider, and execution
+- [x] Implement transaction handling with `CommitOutcomeUnknownError` for uncertain commit outcomes
+- [x] Implement failed rollback connection discard from the pool
 
 **Success:** Write operations require human approval; execution runs exact stored SQL by approval ID only.
 
@@ -99,7 +101,7 @@ Roadmap broken into milestones. Follow the project rule: **understand → implem
 **Goal:** Reproducible, demonstrable project.
 
 - [x] Centralized error handling across MCP tools (MCP `isError` responses)
-- [x] Automated tests (Vitest) for core modules (98 tests, 8 files, all passing)
+- [x] Automated tests (Vitest) for core modules (195 tests, 10 files, all passing)
 - [x] Docker Compose for PostgreSQL (one-command local stack)
 - [x] Documentation (README, docs/, opencode-setup.md)
 - [ ] Create a demo script or example queries
@@ -112,3 +114,4 @@ Roadmap broken into milestones. Follow the project rule: **understand → implem
 - Directories `src/infrastructure/`, `src/mcp/`, `src/ai/`, `src/analysis/`, `test/`, and `docker/` were planned but never created. MCP tools are registered in `src/index.ts`; tests are colocated with source.
 - `context.md` does not exist (it is gitignored).
 - Create directories only when their corresponding functionality is needed.
+- **Live PostgreSQL integration checks** (separate from automated unit tests): `CREATE INDEX`, `ALTER INDEX ... RENAME TO`, `DELETE`, and `WITH ... UPDATE` have been executed against a live PostgreSQL instance through the approval workflow. Not all allowlisted DDL operations have been live-tested; unit coverage covers all allowlisted AST types across classifier, validator, and execution service.

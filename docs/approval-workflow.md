@@ -1,6 +1,6 @@
 # Approval Workflow
 
-QueryMind's write operations are gated behind explicit human approval. Approval and execution are separate steps:
+QueryMind's write operations are gated behind explicit human approval. Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). Approval and execution are separate steps:
 
 - **Approval** authorizes a specific SQL statement for later execution. It does **not** execute SQL.
 - **Execution** runs the approved SQL against the database, but only with a valid approval ID.
@@ -93,9 +93,9 @@ Behavior:
 1. LLM generates SQL for a data modification.
 2. LLM calls `prepare_operation({ sql })`.
 3. `ApprovalService.prepareOperation`:
-   - Classifies the SQL (`SqlOperationClassifier`). Rejects non-write operations.
+   - Classifies the SQL (`SqlOperationClassifier`), identifying the operation type, category (read/write/unknown), and whether approval is required. Rejects non-write or unknown classifications.
    - Identifies the current database (`SELECT current_database()`).
-   - Creates a `pending` approval request in `ApprovalStore` (UUID, 5-minute TTL).
+   - Creates a `pending` approval request in `ApprovalStore` storing the original SQL, classified operation, and target database (UUID, 5-minute TTL).
 4. `ApprovalWorkflowService.prepareAndConfirm`:
    - Builds an operation summary.
    - Calls `McpApprovalConfirmationProvider.confirm` to elicit a human decision.
@@ -105,11 +105,11 @@ Behavior:
 6. If approved, the LLM (or user) calls `execute_approved_operation({ approvalId })`.
 7. `OperationExecutionService.executeOperation`:
    - `prepareExecution`: retrieves the request; requires status `approved`.
-   - Re-validates the stored SQL with `WriteSqlValidator` (INSERT/UPDATE/DELETE only).
+   - Re-validates the stored SQL with `WriteSqlValidator` (INSERT, UPDATE, DELETE, and allowlisted DDL types).
    - Re-classifies and verifies the operation matches the stored operation.
    - Claims the approval: transitions `approved` → `executing` synchronously.
 8. `DatabaseService.withWriteTransaction`:
-   - Verifies `current_database()` and `current_user === "querymind_writer"`.
+   - Verifies `current_database()` matches the expected database and `current_user` matches the configured writer role (`writeRoleName`, default `querymind_writer`).
    - Sets `statement_timeout = '10s'`.
    - Executes the exact stored SQL.
    - Returns `rowCount` as `affectedRows`.

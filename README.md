@@ -20,7 +20,7 @@ QueryMind does **not** contain its own LLM. The MCP client provides the AI agent
 | Read-only query execution (timeouts, row limits, size limits) | Available |
 | SQL validation (read-only, pg-aware AST parser) | Available |
 | Write operations behind human approval | Available |
-| Approval-gated write execution (INSERT, UPDATE, DELETE) | Available |
+| Approval-gated write execution (INSERT, UPDATE, DELETE, and allowlisted DDL) | Available |
 | Query explanation & EXPLAIN support | Not yet |
 | Authentication / authorization | Not yet |
 | Multi-tenancy | Not yet |
@@ -47,7 +47,7 @@ There are two distinct database execution paths:
 
 1. **Read-only execution path** — `execute_query` runs validated SELECT/WITH SQL through a read-only connection pool (`QUERY_DATABASE_URL`, role `querymind_readonly`) inside a read-only transaction with a 10s statement timeout, a 100-row limit, and a 1 MB result-size limit.
 
-2. **Approval-gated write execution path** — `prepare_operation` classifies SQL and requests human approval via MCP elicitation; `execute_approved_operation` runs the exact stored SQL through a separate write connection pool (`WRITE_DATABASE_URL`, role `querymind_writer`) only after explicit human approval.
+2. **Approval-gated write execution path** — `prepare_operation` classifies SQL and requests human approval via MCP elicitation; `execute_approved_operation` runs the exact stored SQL through a separate write connection pool (`WRITE_DATABASE_URL`, role configured via `WRITE_ROLE_NAME`, default `querymind_writer`) only after explicit human approval. Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). Arbitrary SQL and arbitrary DDL are not supported.
 
 See `docs/architecture.md` for detailed execution flows.
 
@@ -95,7 +95,8 @@ Required variables:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `QUERY_DATABASE_URL` | Yes | Read-only connection string (role `querymind_readonly`) |
-| `WRITE_DATABASE_URL` | No | Write connection string (role `querymind_writer`). Write operations are unavailable if not configured. |
+| `WRITE_DATABASE_URL` | No | Write connection string. Write operations are unavailable if not configured. |
+| `WRITE_ROLE_NAME` | No | Expected writer role name, verified at runtime. Defaults to `querymind_writer`. |
 
 See `.env.example` for placeholder values and `docs/database-setup.md` for PostgreSQL role setup.
 
@@ -133,7 +134,7 @@ See `docs/architecture.md` and the tool handler implementations in `src/index.ts
 1. **MCP is the interface, not the entire application.** Business logic lives in independent services.
 2. **Database operations are independent of MCP.** Services can be tested without an MCP client.
 3. **Read-only execution by default.** `execute_query` runs in a read-only transaction with a 10s statement timeout and AST-based validation allowing SELECT/WITH only.
-4. **Write operations require human approval.** `prepare_operation` prepares a write and requests confirmation; `execute_approved_operation` runs it only after approval, using a separate write pool (`WRITE_DATABASE_URL`). Writes are not impossible at the connection level — gate them at the approval layer.
+4. **Write operations require human approval.** `prepare_operation` prepares a write (INSERT, UPDATE, DELETE, or allowlisted DDL) and requests confirmation; `execute_approved_operation` runs it only after approval, using a separate write pool (`WRITE_DATABASE_URL`). Writes are not impossible at the connection level — gate them at the approval layer.
 5. **LLMs never execute SQL directly.** Generated SQL passes deterministic validation before execution.
 6. **Application-level validation is not a complete security boundary.** Database-level role permissions (`querymind_readonly`, `querymind_writer`) are the primary enforcement boundary.
 

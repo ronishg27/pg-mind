@@ -11,13 +11,13 @@ QueryMind is a **TypeScript-only** project. Go and gRPC have been removed entire
 | Language | TypeScript | Single language across the stack, reduces complexity |
 | Runtime | Node.js | Mature ecosystem, strong MCP SDK support |
 | Package manager | pnpm | Fast, disk-efficient installs |
-| MCP server | Official MCP TypeScript SDK (`@modelcontextprotocol/sdk`) | Canonical MCP implementation, stdio transport |
+| MCP server | Official MCP TypeScript SDK (`@modelcontextprotocol/sdk`, ^1.32.2) | Canonical MCP implementation, stdio transport |
 | Backend architecture | Modular TypeScript application | Monolith with separated concerns; easy to test and extend |
 | Database | PostgreSQL | Target database for QueryMind |
-| Database access | `pg` (node-postgres) | Native driver, direct control over SQL execution and introspection (no ORM) |
-| SQL parsing | `pgsql-ast-parser` | PostgreSQL-aware AST parser; safety is more complex than "starts with SELECT" |
-| Validation | Zod | TypeScript-first schema validation for structured inputs/outputs |
-| Testing | Vitest | Fast, TypeScript-native test runner; tests colocated at `src/**/*.test.ts` |
+| Database access | `pg` (node-postgres, ^8.23.1) | Native driver, direct control over SQL execution and introspection (no ORM) |
+| SQL parsing | `pgsql-ast-parser` (^12.0.2) | PostgreSQL-aware AST parser; safety is more complex than "starts with SELECT" |
+| Validation | Zod (^4.6.7) | TypeScript-first schema validation for structured inputs/outputs |
+| Testing | Vitest (^5.1.1) | Fast, TypeScript-native test runner; tests colocated at `src/**/*.test.ts` |
 | Containerization | Docker Compose | PostgreSQL only (`docker-compose.yaml`) |
 
 **Not part of the current implementation:** Ollama / AI integration, natural language → SQL, query explanation (EXPLAIN). SQL is supplied by the MCP client/LLM; QueryMind validates and executes it.
@@ -37,6 +37,9 @@ querymind/
 │   │                           # ApprovalConfirmationProvider, McpApprovalConfirmationProvider,
 │   │                           # OperationExecutionService, OperationExecutionWorkflowService
 │   └── scripts/                # Development smoke-test scripts (require a live database)
+├── src/**/*.test.ts            # Colocated unit tests (Vitest)
+│   ├── modules/database/database.service.test.ts
+│   └── modules/query/write-coverage.test.ts
 ├── docs/                       # Documentation (architecture, database-setup, security, approval-workflow, development, opencode-integration)
 ├── .env.example                # Environment variable template
 ├── .gitignore
@@ -52,8 +55,8 @@ querymind/
 
 1. **No ORM.** The `pg` driver is used directly for full control over SQL execution and schema introspection.
 2. **PostgreSQL-aware SQL parser.** Safety validation uses `pgsql-ast-parser` rather than naive string checks like "starts with SELECT".
-3. **Two connection pools.** A read pool (`QUERY_DATABASE_URL`, required) and an optional write pool (`WRITE_DATABASE_URL`). Database-level roles (`querymind_readonly`, `querymind_writer`) are the primary security boundary.
-4. **Human-approved writes.** Write operations go through `prepare_operation` (MCP elicitation for human approval) and `execute_approved_operation` (execution by approval ID only). The execution tool never accepts arbitrary SQL.
+3. **Two connection pools.** A read pool (`QUERY_DATABASE_URL`, required) and an optional write pool (`WRITE_DATABASE_URL`). Database-level roles (`querymind_readonly`, `querymind_writer`) are the primary security boundary. The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults to `querymind_writer`.
+4. **Human-approved writes.** Write operations go through `prepare_operation` (MCP elicitation for human approval) and `execute_approved_operation` (execution by approval ID only). Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). The execution tool never accepts arbitrary SQL — only an approval ID.
 5. **Separate read and write validators.** `SqlValidator` guards the read-only path; `WriteSqlValidator` guards the write path. They are intentionally not merged.
 6. **MCP as interface only.** Business logic is in independent services under `src/modules/`, not inside MCP tool handlers.
 7. **No unnecessary infrastructure.** No Redis, message queues, vector DB, or separate metadata database.
@@ -66,5 +69,7 @@ querymind/
 
 ## Test Summary
 
-- **8 test files, 98 tests, all passing** (fresh `pnpm test` run).
+- **10 test files, 195 tests, all passing** (verified with `pnpm test`).
 - Typecheck (`tsc --noEmit`) passes clean.
+
+Tests are colocated unit tests (Vitest). Live PostgreSQL integration checks are separate and require a running database instance; test coverage percentage is not a security or quality guarantee.
