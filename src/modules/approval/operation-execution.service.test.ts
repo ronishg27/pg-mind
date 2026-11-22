@@ -31,7 +31,15 @@ describe("OperationExecutionService", () => {
 
     function createApprovedRequest(
         sql = "UPDATE products SET price = 500 WHERE id = 1",
-        operation: "INSERT" | "UPDATE" | "DELETE" = "UPDATE",
+        operation:
+            | "SELECT"
+            | "INSERT"
+            | "UPDATE"
+            | "DELETE"
+            | "CREATE"
+            | "ALTER"
+            | "DROP"
+            | "TRUNCATE" = "UPDATE",
     ) {
         const request = store.create({
             sql,
@@ -146,6 +154,147 @@ describe("OperationExecutionService", () => {
 
         expect(store.getById(request.id)?.status).toBe("approved");
         expect(database.withWriteTransaction).not.toHaveBeenCalled();
+    });
+
+    describe("Allowed preparation for supported operations", () => {
+        const cases = [
+            ["INSERT", "INSERT INTO products (name, price) VALUES ('Keyboard', 100)"],
+            ["UPDATE", "UPDATE products SET price = 500 WHERE id = 1"],
+            ["DELETE", "DELETE FROM products WHERE id = 1"],
+            ["CREATE", "CREATE TABLE test_table (id INTEGER)"],
+            ["CREATE", "CREATE INDEX idx_products_name ON products(name)"],
+            ["CREATE", "CREATE SCHEMA myschema"],
+            ["ALTER", "ALTER TABLE products ADD COLUMN description TEXT"],
+            ["ALTER", "ALTER INDEX idx_products_name RENAME TO idx_new"],
+            ["DROP", "DROP TABLE test_table"],
+            ["DROP", "DROP INDEX idx_products_name"],
+            ["TRUNCATE", "TRUNCATE TABLE products"],
+        ] as const;
+
+        it.each(cases)(
+            "should prepare %s operation for execution",
+            async (operation, sql) => {
+                const request = createApprovedRequest(sql, operation);
+
+                database.withWriteTransaction.mockImplementation(
+                    async (
+                        _databaseName: string,
+                        callback: (client: unknown) => Promise<number>,
+                    ) => {
+                        return callback({
+                            query: vi.fn().mockResolvedValue({
+                                rowCount: 0,
+                            }),
+                        });
+                    },
+                );
+
+                await expect(
+                    service.executeOperation(request.id),
+                ).resolves.toMatchObject({
+                    approvalId: request.id,
+                    operation,
+                    database: "querymind_dev",
+                    status: "executed",
+                });
+
+                expect(store.getById(request.id)?.status).toBe("executed");
+            },
+        );
+    });
+
+    describe("Rejected preparation", () => {
+        it("should reject SELECT (unsupported for execution)", async () => {
+            const request = createApprovedRequest(
+                "SELECT * FROM products",
+                "SELECT",
+            );
+
+            await expect(service.executeOperation(request.id)).rejects.toThrow(
+                "SQL validation failed",
+            );
+
+            expect(store.getById(request.id)?.status).toBe("approved");
+            expect(database.withWriteTransaction).not.toHaveBeenCalled();
+        });
+
+        it("should reject CREATE FUNCTION (unsupported DDL)", async () => {
+            const request = createApprovedRequest(
+                "CREATE FUNCTION add_one(integer) RETURNS integer LANGUAGE sql AS 'SELECT $1 + 1'",
+                "CREATE",
+            );
+
+            await expect(service.executeOperation(request.id)).rejects.toThrow();
+
+            expect(store.getById(request.id)?.status).toBe("approved");
+            expect(database.withWriteTransaction).not.toHaveBeenCalled();
+        });
+
+        it("should reject DROP TYPE (unsupported DDL)", async () => {
+            const request = createApprovedRequest(
+                "DROP TYPE mood",
+                "DROP",
+            );
+
+            await expect(service.executeOperation(request.id)).rejects.toThrow();
+
+            expect(store.getById(request.id)?.status).toBe("approved");
+            expect(database.withWriteTransaction).not.toHaveBeenCalled();
+        });
+
+        it("should reject SQL whose classification differs from stored operation", async () => {
+            const request = createApprovedRequest(
+                "UPDATE products SET price = 500 WHERE id = 1",
+                "DELETE",
+            );
+
+            await expect(service.executeOperation(request.id)).rejects.toThrow(
+                "Operation mismatch",
+            );
+
+            expect(store.getById(request.id)?.status).toBe("approved");
+            expect(database.withWriteTransaction).not.toHaveBeenCalled();
+        });
+
+        it("should reject invalid SQL", async () => {
+            const request = createApprovedRequest(
+                "UPDATE SET price = 100",
+                "UPDATE",
+            );
+
+            await expect(service.executeOperation(request.id)).rejects.toThrow(
+                "SQL validation failed",
+            );
+
+            expect(store.getById(request.id)?.status).toBe("approved");
+            expect(database.withWriteTransaction).not.toHaveBeenCalled();
+        });
+
+        it("should reject reusing an approval ID that is no longer approved", async () => {
+            const request = createApprovedRequest();
+
+            database.withWriteTransaction.mockImplementation(
+                async (
+                    _databaseName: string,
+                    callback: (client: unknown) => Promise<number>,
+                ) => {
+                    return callback({
+                        query: vi.fn().mockResolvedValue({
+                            rowCount: 1,
+                        }),
+                    });
+                },
+            );
+
+            await service.executeOperation(request.id);
+
+            await expect(service.executeOperation(request.id)).rejects.toThrow(
+                "not approved",
+            );
+
+            expect(store.getById(request.id)?.status).toBe("executed");
+            expect(database.withWriteTransaction).toHaveBeenCalledTimes(1);
+        });
     });
 
     it("should mark an operation as execution_unknown when commit outcome is uncertain", async () => {

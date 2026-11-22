@@ -2,7 +2,31 @@ import { parse } from "pgsql-ast-parser";
 
 import type { SqlOperationClassifier } from "./sql-operation-classifier.js";
 
-const SUPPORTED_OPERATIONS = ["INSERT", "UPDATE", "DELETE"];
+const SUPPORTED_OPERATIONS = [
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "TRUNCATE",
+];
+
+const DML_WRITE_TYPES = new Set(["insert", "update", "delete"]);
+
+const DDL_WRITE_TYPES = new Set([
+    "create table",
+    "create index",
+    "create schema",
+    "create view",
+    "alter table",
+    "alter index",
+    "drop table",
+    "drop index",
+    "truncate table",
+]);
+
+const SUPPORTED_WRITE_TYPES = new Set([...DML_WRITE_TYPES, ...DDL_WRITE_TYPES]);
 
 const DISALLOWED_FUNCTIONS = new Set([
     "pg_terminate_backend",
@@ -74,7 +98,7 @@ export class WriteSqlValidator {
         ) {
             return {
                 valid: false,
-                reason: "Only INSERT, UPDATE, and DELETE operations are allowed.",
+                reason: "Unsupported operation. Only INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, and TRUNCATE are allowed.",
             };
         }
 
@@ -99,14 +123,19 @@ export class WriteSqlValidator {
             };
         }
 
+        if (this.containsConcurrently(statement)) {
+            return {
+                valid: false,
+                reason: "CONCURRENTLY is not supported because it cannot run inside a transaction.",
+            };
+        }
+
         return { valid: true };
     }
 
     private hasSupportedStructure(statement: Record<string, unknown>): boolean {
         if (statement.type !== "with") {
-            return SUPPORTED_OPERATIONS.includes(
-                String(statement.type).toUpperCase(),
-            );
+            return SUPPORTED_WRITE_TYPES.has(String(statement.type).toLowerCase());
         }
 
         const bindings = statement.bind;
@@ -131,8 +160,8 @@ export class WriteSqlValidator {
             }
         }
 
-        return SUPPORTED_OPERATIONS.includes(
-            String(finalStatement.type).toUpperCase(),
+        return SUPPORTED_WRITE_TYPES.has(
+            String(finalStatement.type).toLowerCase(),
         );
     }
 
@@ -147,7 +176,7 @@ export class WriteSqlValidator {
 
         const type = String(node.type ?? "").toLowerCase();
 
-        if (["insert", "update", "delete"].includes(type)) {
+        if (SUPPORTED_WRITE_TYPES.has(type)) {
             return true;
         }
 
@@ -196,6 +225,24 @@ export class WriteSqlValidator {
 
         return Object.values(node).some((value) =>
             this.containsUnsafeSelect(value),
+        );
+    }
+
+    private containsConcurrently(node: unknown): boolean {
+        if (Array.isArray(node)) {
+            return node.some((item) => this.containsConcurrently(item));
+        }
+
+        if (!this.isObject(node)) {
+            return false;
+        }
+
+        if (node.concurrently === true) {
+            return true;
+        }
+
+        return Object.values(node).some((value) =>
+            this.containsConcurrently(value),
         );
     }
 

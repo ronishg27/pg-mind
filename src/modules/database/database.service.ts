@@ -1,3 +1,4 @@
+import config from "../../config/index.js";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 export class DatabaseService {
@@ -97,13 +98,12 @@ export class DatabaseService {
 
             const identity = identityResult.rows[0];
 
-            // TODO: Do not hardcode the role name. Instead, fetch it from a configuration or environment variable.
             if (
                 identity?.database !== expectedDatabase ||
-                identity?.role !== "querymind_writer"
+                identity?.role !== config.writeRoleName
             ) {
                 throw new Error(
-                    `Writer connection identity mismatch. Expected database: ${expectedDatabase}, role: querymind_writer. Got database: ${identity?.database}, role: ${identity?.role}`,
+                    `Writer connection identity mismatch. Expected database: ${expectedDatabase}, role: ${config.writeRoleName}. Got database: ${identity?.database}, role: ${identity?.role}`,
                 );
             }
 
@@ -126,7 +126,13 @@ export class DatabaseService {
         } catch (error) {
             try {
                 await client.query("ROLLBACK");
-            } catch (error) {
+            } catch (rollbackError) {
+                // Mark the client for removal from the pool so an uncertain
+                // connection is not reused after a failed rollback.
+                releaseError =
+                    rollbackError instanceof Error
+                        ? rollbackError
+                        : new Error(String(rollbackError));
                 // preserve the original error if rollback fails
             }
             throw error;

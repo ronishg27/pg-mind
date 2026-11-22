@@ -9,6 +9,9 @@ import { ApprovalService } from "./modules/approval/approval.service.js";
 import { ApprovalWorkflowService } from "./modules/approval/approval-workflow.service.js";
 import { McpApprovalConfirmationProvider } from "./modules/approval/mcp-approval-confirmation.provider.js";
 import { SqlOperationClassifier } from "./modules/query/sql-operation-classifier.js";
+import { WriteSqlValidator } from "./modules/query/write-sql-validator.js";
+import { OperationExecutionService } from "./modules/approval/operation-execution.service.js";
+import { OperationExecutionWorkflowService } from "./modules/approval/operation-execution-workflow.service.js";
 import { z } from "zod";
 
 process.loadEnvFile(".env");
@@ -47,6 +50,19 @@ const confirmationProvider = new McpApprovalConfirmationProvider(server);
 const approvalWorkflow = new ApprovalWorkflowService(
     approvalService,
     confirmationProvider,
+);
+
+const writeSqlValidator = new WriteSqlValidator(operationClassifier);
+
+const operationExecutionService = new OperationExecutionService(
+    approvalStore,
+    writeSqlValidator,
+    operationClassifier,
+    database,
+);
+
+const operationExecutionWorkflow = new OperationExecutionWorkflowService(
+    operationExecutionService,
 );
 
 // first tool ping
@@ -180,6 +196,44 @@ server.registerTool(
                             error instanceof Error
                                 ? error.message
                                 : "Failed to prepare database operation.",
+                    },
+                ],
+            };
+        }
+    },
+);
+
+server.registerTool(
+    "execute_approved_operation",
+    {
+        description:
+            "Execute a database operation that has already received human approval. Requires an approval ID returned by prepare_operation.",
+        inputSchema: z.object({
+            approvalId: z.uuid(),
+        }),
+    },
+    async ({ approvalId }) => {
+        try {
+            const result = await operationExecutionWorkflow.execute(approvalId);
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: JSON.stringify(result, null, 2),
+                    },
+                ],
+            };
+        } catch (error) {
+            return {
+                isError: true,
+                content: [
+                    {
+                        type: "text",
+                        text:
+                            error instanceof Error
+                                ? error.message
+                                : "Operation execution failed.",
                     },
                 ],
             };

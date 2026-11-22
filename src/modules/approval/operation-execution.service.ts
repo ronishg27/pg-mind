@@ -38,7 +38,15 @@ export class OperationExecutionService {
 
         const classification = this.classifier.classify(request.sql);
 
-        const supportedOperations = ["INSERT", "UPDATE", "DELETE"];
+        const supportedOperations = [
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "CREATE",
+            "ALTER",
+            "DROP",
+            "TRUNCATE",
+        ];
 
         if (
             classification.category !== "write" ||
