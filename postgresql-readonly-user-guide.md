@@ -7,7 +7,7 @@ The examples use:
 | Setting | Example value |
 |---|---|
 | Database | `supergen` |
-| Read-only role | `querymind_readonly` |
+| Read-only role | `pgmind_readonly` |
 | Schema | `public` |
 | PostgreSQL host | `localhost` |
 | PostgreSQL port | `5432` |
@@ -43,7 +43,7 @@ You can create the login role while connected to any database in the same Postgr
 Run this once per PostgreSQL cluster:
 
 ```sql
-CREATE ROLE querymind_readonly
+CREATE ROLE pgmind_readonly
     WITH LOGIN
     NOSUPERUSER
     NOCREATEDB
@@ -55,7 +55,7 @@ CREATE ROLE querymind_readonly
 Set its password using the `psql` password command:
 
 ```psql
-\password querymind_readonly
+\password pgmind_readonly
 ```
 
 Enter the password when prompted. This avoids putting the plaintext password directly into a SQL command or shell history.
@@ -65,7 +65,7 @@ Enter the password when prompted. This avoids putting the plaintext password dir
 Do not run `CREATE ROLE` again. Instead, ensure it has the intended login attributes and reset its password if needed:
 
 ```sql
-ALTER ROLE querymind_readonly
+ALTER ROLE pgmind_readonly
     WITH LOGIN
     NOSUPERUSER
     NOCREATEDB
@@ -77,7 +77,7 @@ ALTER ROLE querymind_readonly
 Then run:
 
 ```psql
-\password querymind_readonly
+\password pgmind_readonly
 ```
 
 ## 4. Grant access to the target database and schema
@@ -91,11 +91,11 @@ Make sure your `psql` session is connected to the target database:
 Grant the role permission to connect to the database, use the `public` schema, and select from existing tables and views:
 
 ```sql
-GRANT CONNECT ON DATABASE supergen TO querymind_readonly;
+GRANT CONNECT ON DATABASE supergen TO pgmind_readonly;
 
-GRANT USAGE ON SCHEMA public TO querymind_readonly;
+GRANT USAGE ON SCHEMA public TO pgmind_readonly;
 
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO querymind_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgmind_readonly;
 ```
 
 These grants apply to the `supergen` database and its `public` schema. They do not automatically grant access to other databases or schemas.
@@ -105,8 +105,8 @@ These grants apply to the `supergen` database and its `public` schema. They do n
 If the application needs to inspect or query another schema, grant access to that schema too. For example, for a schema named `sales`:
 
 ```sql
-GRANT USAGE ON SCHEMA sales TO querymind_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA sales TO querymind_readonly;
+GRANT USAGE ON SCHEMA sales TO pgmind_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA sales TO pgmind_readonly;
 ```
 
 Repeat this for every application schema the account should access. Grant only the schemas that the application actually needs.
@@ -136,7 +136,7 @@ Replace `actual_table_owner` below with the role that creates the tables or runs
 ```sql
 ALTER DEFAULT PRIVILEGES FOR ROLE supergen_owner
 IN SCHEMA public
-GRANT SELECT ON TABLES TO querymind_readonly;
+GRANT SELECT ON TABLES TO pgmind_readonly;
 ```
 
 For another schema, specify that schema:
@@ -144,19 +144,19 @@ For another schema, specify that schema:
 ```sql
 ALTER DEFAULT PRIVILEGES FOR ROLE supergen_owner
 IN SCHEMA sales
-GRANT SELECT ON TABLES TO querymind_readonly;
+GRANT SELECT ON TABLES TO pgmind_readonly;
 ```
 
 **Important:** Default privileges are specific to the role that creates the objects. If migrations or application code create tables under multiple owner roles, configure default privileges for each owner. A superuser can configure these defaults; otherwise, run the command as the relevant object-creating role or a role permitted to act for it.
 
-Default privileges do not automatically grant `USAGE` on a schema that is created in the future. When a new schema is created, grant `USAGE` on it to `querymind_readonly` as well.
+Default privileges do not automatically grant `USAGE` on a schema that is created in the future. When a new schema is created, grant `USAGE` on it to `pgmind_readonly` as well.
 
 ## 6. Optional: Set read-only transactions by default
 
 You can make new transactions default to read-only for this role in this database:
 
 ```sql
-ALTER ROLE querymind_readonly
+ALTER ROLE pgmind_readonly
     IN DATABASE supergen
     SET default_transaction_read_only = on;
 ```
@@ -174,7 +174,7 @@ Exit the administrator session:
 Connect as the new read-only role. Always specify the target database with `-d`:
 
 ```powershell
-psql -h localhost -p 5432 -U querymind_readonly -d supergen
+psql -h localhost -p 5432 -U pgmind_readonly -d supergen
 ```
 
 Check the connection identity:
@@ -187,7 +187,7 @@ SELECT current_database() AS database_name,
 Expected values:
 
 - `database_name`: `supergen`
-- `login_role`: `querymind_readonly`
+- `login_role`: `pgmind_readonly`
 
 Check which tables and views are visible to the account:
 
@@ -230,7 +230,7 @@ Expected result: `CREATE TABLE` fails with a permission error because the role d
 For PGMind, set `QUERY_DATABASE_URL` to the read-only account and the intended database:
 
 ```dotenv
-QUERY_DATABASE_URL=postgresql://querymind_readonly:YOUR_PASSWORD@localhost:5432/supergen
+QUERY_DATABASE_URL=postgresql://pgmind_readonly:YOUR_PASSWORD@localhost:5432/supergen
 ```
 
 Use the correct host and port for your PostgreSQL server. If the password contains URL-reserved characters (for example `@`, `:`, `/`, `?`, `#`, or `%`), URL-encode the password in the connection string.
@@ -241,12 +241,12 @@ After changing `.env`, restart the PGMind MCP server and the OpenCode session th
 
 ## 9. Troubleshooting
 
-### `FATAL: database "querymind_readonly" does not exist`
+### `FATAL: database "pgmind_readonly" does not exist`
 
 The `psql` command omitted `-d`, so it tried to connect to a database named after the user. Specify the database explicitly:
 
 ```powershell
-psql -h localhost -p 5432 -U querymind_readonly -d supergen
+psql -h localhost -p 5432 -U pgmind_readonly -d supergen
 ```
 
 ### The application reports that no tables exist
@@ -296,14 +296,14 @@ Grant `USAGE` and `SELECT` on each required schema. Do not assume granting acces
 For an existing `public` schema in database `supergen`, the core grants are:
 
 ```sql
-GRANT CONNECT ON DATABASE supergen TO querymind_readonly;
-GRANT USAGE ON SCHEMA public TO querymind_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO querymind_readonly;
+GRANT CONNECT ON DATABASE supergen TO pgmind_readonly;
+GRANT USAGE ON SCHEMA public TO pgmind_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgmind_readonly;
 
 -- Replace supergen_owner with the role that creates future tables.
 ALTER DEFAULT PRIVILEGES FOR ROLE supergen_owner
 IN SCHEMA public
-GRANT SELECT ON TABLES TO querymind_readonly;
+GRANT SELECT ON TABLES TO pgmind_readonly;
 ```
 
 The default-privileges command is important for future tables; the first three grants cover the current database, schema, and existing tables.

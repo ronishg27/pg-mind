@@ -55,7 +55,7 @@ pgmind/
 
 1. **No ORM.** The `pg` driver is used directly for full control over SQL execution and schema introspection.
 2. **PostgreSQL-aware SQL parser.** Safety validation uses `pgsql-ast-parser` rather than naive string checks like "starts with SELECT".
-3. **Two connection pools.** A read pool (`QUERY_DATABASE_URL`, required) and an optional write pool (`WRITE_DATABASE_URL`). Database-level roles (`querymind_readonly`, `querymind_writer`) are the primary security boundary. The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults to `querymind_writer`.
+3. **Two connection pools.** A read pool (`QUERY_DATABASE_URL`, required) and an optional write pool (`WRITE_DATABASE_URL`). Database-level roles (`pgmind_readonly`, `pgmind_writer`) are the primary security boundary. The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults to `pgmind_writer`.
 4. **Human-approved writes.** Write operations go through `prepare_operation` (MCP elicitation for human approval) and `execute_approved_operation` (execution by approval ID only). Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). The execution tool never accepts arbitrary SQL — only an approval ID.
 5. **Separate read and write validators.** `SqlValidator` guards the read-only path; `WriteSqlValidator` guards the write path. They are intentionally not merged.
 6. **MCP as interface only.** Business logic is in independent services under `src/modules/`, not inside MCP tool handlers.

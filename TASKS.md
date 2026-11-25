@@ -28,7 +28,7 @@ Roadmap broken into milestones. Follow the project rule: **understand → implem
 - [x] Create `src/modules/database/database.service.ts` (read + write pools)
 - [x] Create `src/modules/schema/schema.service.ts` and `schema.types.ts`
 - [x] Implement PostgreSQL connection with configurable connection strings
-- [x] Use read-only database credentials (`querymind_readonly`)
+- [x] Use read-only database credentials (`pgmind_readonly`)
 - [x] Implement table, column, and foreign-key introspection (information_schema queries)
 - [x] Expose schema introspection as an MCP tool (`get_database_schema`)
 - [x] Write unit tests for SQL validator and query executor
@@ -68,7 +68,7 @@ Roadmap broken into milestones. Follow the project rule: **understand → implem
 - [x] Create `src/modules/approval/operation-execution.service.ts`
 - [x] Create `src/modules/approval/operation-execution-workflow.service.ts`
 - [x] Register `prepare_operation` and `execute_approved_operation` MCP tools
-- [x] Add `WRITE_DATABASE_URL` support, `WRITE_ROLE_NAME` configurable writer role (default `querymind_writer`), and runtime database/role verification
+- [x] Add `WRITE_DATABASE_URL` support, `WRITE_ROLE_NAME` configurable writer role (default `pgmind_writer`), and runtime database/role verification
 - [x] Write unit tests for approval store, service, workflow, provider, and execution
 - [x] Implement transaction handling with `CommitOutcomeUnknownError` for uncertain commit outcomes
 - [x] Implement failed rollback connection discard from the pool

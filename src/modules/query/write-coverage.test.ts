@@ -81,7 +81,7 @@ describe("Write operation coverage across layers", () => {
                 const request = store.create({
                     sql,
                     operation: expectedOperation,
-                    database: "querymind_dev",
+                    database: "pgmind_dev",
                 });
                 store.updateStatus(request.id, "approved");
 
@@ -117,7 +117,7 @@ describe("Write operation coverage across layers", () => {
                 const request = store.create({
                     sql,
                     operation: "OTHER",
-                    database: "querymind_dev",
+                    database: "pgmind_dev",
                 });
                 store.updateStatus(request.id, "approved");
 
@@ -143,7 +143,7 @@ describe("Write operation coverage across layers", () => {
             const request = store.create({
                 sql,
                 operation: "SELECT",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
             store.updateStatus(request.id, "approved");
 
@@ -171,7 +171,7 @@ describe("Write operation coverage across layers", () => {
             const request = store.create({
                 sql,
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
             store.updateStatus(request.id, "approved");
 
@@ -187,7 +187,7 @@ describe("Write operation coverage across layers", () => {
             const request = store.create({
                 sql: "DELETE FROM products WHERE id = 1",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
             store.updateStatus(request.id, "approved");
 
@@ -215,7 +215,7 @@ describe("Write operation coverage across layers", () => {
             const request = store.create({
                 sql,
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
             store.updateStatus(request.id, "approved");
 

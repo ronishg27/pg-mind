@@ -20,7 +20,7 @@ describe("ApprovalService", () => {
         };
 
         databaseService = {
-            query: vi.fn().mockResolvedValue([{ database: "querymind_dev" }]),
+            query: vi.fn().mockResolvedValue([{ database: "pgmind_dev" }]),
         };
 
         service = new ApprovalService(
@@ -47,7 +47,7 @@ describe("ApprovalService", () => {
             expect(approvalStore.create).toHaveBeenCalledWith({
                 sql,
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
         });
 

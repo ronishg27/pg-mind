@@ -27,7 +27,7 @@ describe("McpApprovalConfirmationProvider", () => {
         id: "test-approval-id",
         sql: "UPDATE products SET price = 500 WHERE id = 1",
         operation: "UPDATE",
-        database: "querymind_dev",
+        database: "pgmind_dev",
         status: "pending",
         createdAt: new Date(),
         expiresAt: new Date(Date.now() + 300_000),

@@ -22,13 +22,13 @@ cp .env.example .env
 Required:
 
 ```dotenv
-QUERY_DATABASE_URL=postgresql://querymind_readonly:your_password@localhost:5433/querymind_dev
+QUERY_DATABASE_URL=postgresql://pgmind_readonly:your_password@localhost:5433/pgmind_dev
 ```
 
 Optional (enables write operations):
 
 ```dotenv
-WRITE_DATABASE_URL=postgresql://querymind_writer:your_password@localhost:5433/querymind_dev
+WRITE_DATABASE_URL=postgresql://pgmind_writer:your_password@localhost:5433/pgmind_dev
 ```
 
 The app loads `.env` automatically via `process.loadEnvFile(".env")` at startup. Restart the MCP server (and the OpenCode session that launched it) after changing `.env`.
@@ -130,7 +130,7 @@ PGMind classifies the SQL, creates a pending approval request, and presents the 
 The elicitation prompt (shown to the human through the MCP client) displays:
 
 - Operation: UPDATE
-- Database: querymind_dev
+- Database: pgmind_dev
 - Summary: Modifies existing records in a database table.
 - Complete SQL statement: `UPDATE products SET price = 500 WHERE id = 1`
 - Approve / Reject choice
@@ -161,13 +161,13 @@ The LLM calls `execute_approved_operation` with the returned approval ID:
 execute_approved_operation(approvalId: "<uuid>")
 ```
 
-PGMind re-validates the stored SQL, claims the approval (single-use), verifies the writer connection (`current_database()` + `current_user === "querymind_writer"`), executes the exact stored SQL in a transaction, and records the result:
+PGMind re-validates the stored SQL, claims the approval (single-use), verifies the writer connection (`current_database()` + `current_user === "pgmind_writer"`), executes the exact stored SQL in a transaction, and records the result:
 
 ```json
 {
     "approvalId": "<uuid>",
     "operation": "UPDATE",
-    "database": "querymind_dev",
+    "database": "pgmind_dev",
     "affectedRows": 1,
     "status": "executed",
     "message": "UPDATE operation executed successfully."

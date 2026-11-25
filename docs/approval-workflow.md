@@ -109,7 +109,7 @@ Behavior:
    - Re-classifies and verifies the operation matches the stored operation.
    - Claims the approval: transitions `approved` → `executing` synchronously.
 8. `DatabaseService.withWriteTransaction`:
-   - Verifies `current_database()` matches the expected database and `current_user` matches the configured writer role (`writeRoleName`, default `querymind_writer`).
+   - Verifies `current_database()` matches the expected database and `current_user` matches the configured writer role (`writeRoleName`, default `pgmind_writer`).
    - Sets `statement_timeout = '10s'`.
    - Executes the exact stored SQL.
    - Returns `rowCount` as `affectedRows`.

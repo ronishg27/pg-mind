@@ -29,7 +29,7 @@ describe("DatabaseService.withWriteTransaction", () => {
     it("throws when the write pool is not configured", async () => {
         const database = new DatabaseService("postgres://read");
         await expect(
-            database.withWriteTransaction("querymind_dev", async () => {}),
+            database.withWriteTransaction("pgmind_dev", async () => {}),
         ).rejects.toThrow("Write pool is not configured");
     });
 
@@ -37,7 +37,7 @@ describe("DatabaseService.withWriteTransaction", () => {
         mockQuery
             .mockResolvedValueOnce({}) // BEGIN
             .mockResolvedValueOnce({
-                rows: [{ database: "querymind_dev", role: "querymind_writer" }],
+                rows: [{ database: "pgmind_dev", role: "pgmind_writer" }],
             }) // identity check
             .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
             .mockResolvedValueOnce({}); // COMMIT
@@ -47,7 +47,7 @@ describe("DatabaseService.withWriteTransaction", () => {
             "postgres://write",
         );
         const result = await database.withWriteTransaction(
-            "querymind_dev",
+            "pgmind_dev",
             async () => "done",
         );
 
@@ -62,7 +62,7 @@ describe("DatabaseService.withWriteTransaction", () => {
         mockQuery
             .mockResolvedValueOnce({}) // BEGIN
             .mockResolvedValueOnce({
-                rows: [{ database: "querymind_dev", role: "querymind_writer" }],
+                rows: [{ database: "pgmind_dev", role: "pgmind_writer" }],
             }) // identity check
             .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
             .mockResolvedValueOnce({}); // ROLLBACK
@@ -73,7 +73,7 @@ describe("DatabaseService.withWriteTransaction", () => {
         );
         const sqlError = new Error("SQL failed");
         await expect(
-            database.withWriteTransaction("querymind_dev", async () => {
+            database.withWriteTransaction("pgmind_dev", async () => {
                 throw sqlError;
             }),
         ).rejects.toBe(sqlError);
@@ -87,7 +87,7 @@ describe("DatabaseService.withWriteTransaction", () => {
         mockQuery
             .mockResolvedValueOnce({}) // BEGIN
             .mockResolvedValueOnce({
-                rows: [{ database: "querymind_dev", role: "querymind_writer" }],
+                rows: [{ database: "pgmind_dev", role: "pgmind_writer" }],
             }) // identity check
             .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
             .mockRejectedValueOnce(new Error("rollback failed")); // ROLLBACK
@@ -98,7 +98,7 @@ describe("DatabaseService.withWriteTransaction", () => {
         );
         const sqlError = new Error("SQL failed");
         await expect(
-            database.withWriteTransaction("querymind_dev", async () => {
+            database.withWriteTransaction("pgmind_dev", async () => {
                 throw sqlError;
             }),
         ).rejects.toBe(sqlError);
@@ -112,7 +112,7 @@ describe("DatabaseService.withWriteTransaction", () => {
         mockQuery
             .mockResolvedValueOnce({}) // BEGIN
             .mockResolvedValueOnce({
-                rows: [{ database: "querymind_dev", role: "querymind_writer" }],
+                rows: [{ database: "pgmind_dev", role: "pgmind_writer" }],
             }) // identity check
             .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
             .mockRejectedValueOnce(new Error("commit failed")) // COMMIT
@@ -123,7 +123,7 @@ describe("DatabaseService.withWriteTransaction", () => {
             "postgres://write",
         );
         await expect(
-            database.withWriteTransaction("querymind_dev", async () => 1),
+            database.withWriteTransaction("pgmind_dev", async () => 1),
         ).rejects.toBeInstanceOf(CommitOutcomeUnknownError);
 
         expect(mockQuery).toHaveBeenNthCalledWith(4, "COMMIT");
@@ -144,9 +144,9 @@ describe("DatabaseService.withWriteTransaction", () => {
             "postgres://write",
         );
         await expect(
-            database.withWriteTransaction("querymind_dev", async () => {}),
+            database.withWriteTransaction("pgmind_dev", async () => {}),
         ).rejects.toThrow(
-            "Writer connection identity mismatch. Expected database: querymind_dev, role: querymind_writer. Got database: other_db, role: other_role",
+            "Writer connection identity mismatch. Expected database: pgmind_dev, role: pgmind_writer. Got database: other_db, role: other_role",
         );
 
         expect(mockQuery).toHaveBeenLastCalledWith("ROLLBACK");

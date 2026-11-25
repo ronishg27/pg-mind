@@ -31,7 +31,7 @@ export class QueryService {
         // 3. Wrap the query and fetch one extra row
         const limitedSql = `
           SELECT * 
-          FROM (${normalizedSql}) AS querymind_result
+          FROM (${normalizedSql}) AS pgmind_result
           LIMIT ${MAX_ROWS + 1};
         `;
 

@@ -61,7 +61,7 @@ Tools: `ping`, `execute_query`, `get_database_schema`, `prepare_operation`, `exe
 - [x] Support configurable connection parameters via connection strings (`QUERY_DATABASE_URL`, `WRITE_DATABASE_URL`).
 - [ ] Test the connection before use (not implemented as a startup check).
 - [x] Use read-only database credentials for the read path.
-- [x] Use a restricted writer role (`querymind_writer`) for the optional write path.
+- [x] Use a restricted writer role (`pgmind_writer`) for the optional write path.
 
 ### 6.3 Schema Introspection
 

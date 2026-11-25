@@ -45,9 +45,9 @@ External PostgreSQL Database
 
 There are two distinct database execution paths:
 
-1. **Read-only execution path** — `execute_query` runs validated SELECT/WITH SQL through a read-only connection pool (`QUERY_DATABASE_URL`, role `querymind_readonly`) inside a read-only transaction with a 10s statement timeout, a 100-row limit, and a 1 MB result-size limit.
+1. **Read-only execution path** — `execute_query` runs validated SELECT/WITH SQL through a read-only connection pool (`QUERY_DATABASE_URL`, role `pgmind_readonly`) inside a read-only transaction with a 10s statement timeout, a 100-row limit, and a 1 MB result-size limit.
 
-2. **Approval-gated write execution path** — `prepare_operation` classifies SQL and requests human approval via MCP elicitation; `execute_approved_operation` runs the exact stored SQL through a separate write connection pool (`WRITE_DATABASE_URL`, role configured via `WRITE_ROLE_NAME`, default `querymind_writer`) only after explicit human approval. Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). Arbitrary SQL and arbitrary DDL are not supported.
+2. **Approval-gated write execution path** — `prepare_operation` classifies SQL and requests human approval via MCP elicitation; `execute_approved_operation` runs the exact stored SQL through a separate write connection pool (`WRITE_DATABASE_URL`, role configured via `WRITE_ROLE_NAME`, default `pgmind_writer`) only after explicit human approval. Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). Arbitrary SQL and arbitrary DDL are not supported.
 
 See `docs/architecture.md` for detailed execution flows.
 
@@ -94,9 +94,9 @@ Required variables:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `QUERY_DATABASE_URL` | Yes | Read-only connection string (role `querymind_readonly`) |
+| `QUERY_DATABASE_URL` | Yes | Read-only connection string (role `pgmind_readonly`) |
 | `WRITE_DATABASE_URL` | No | Write connection string. Write operations are unavailable if not configured. |
-| `WRITE_ROLE_NAME` | No | Expected writer role name, verified at runtime. Defaults to `querymind_writer`. |
+| `WRITE_ROLE_NAME` | No | Expected writer role name, verified at runtime. Defaults to `pgmind_writer`. |
 
 See `.env.example` for placeholder values and `docs/database-setup.md` for PostgreSQL role setup.
 
@@ -136,7 +136,7 @@ See `docs/architecture.md` and the tool handler implementations in `src/index.ts
 3. **Read-only execution by default.** `execute_query` runs in a read-only transaction with a 10s statement timeout and AST-based validation allowing SELECT/WITH only.
 4. **Write operations require human approval.** `prepare_operation` prepares a write (INSERT, UPDATE, DELETE, or allowlisted DDL) and requests confirmation; `execute_approved_operation` runs it only after approval, using a separate write pool (`WRITE_DATABASE_URL`). Writes are not impossible at the connection level — gate them at the approval layer.
 5. **LLMs never execute SQL directly.** Generated SQL passes deterministic validation before execution.
-6. **Application-level validation is not a complete security boundary.** Database-level role permissions (`querymind_readonly`, `querymind_writer`) are the primary enforcement boundary.
+6. **Application-level validation is not a complete security boundary.** Database-level role permissions (`pgmind_readonly`, `pgmind_writer`) are the primary enforcement boundary.
 
 ## Development Commands (run from repo root)
 

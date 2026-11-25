@@ -7,7 +7,7 @@ describe("ApprovalStore", () => {
     const validInput = {
         sql: "UPDATE users SET status = 'active'",
         operation: "UPDATE" as const,
-        database: "querymind_dev",
+        database: "pgmind_dev",
         affectedRows: 5,
     };
 
@@ -29,7 +29,7 @@ describe("ApprovalStore", () => {
             expect(request.status).toBe("pending");
             expect(request.sql).toBe(validInput.sql);
             expect(request.operation).toBe("UPDATE");
-            expect(request.database).toBe("querymind_dev");
+            expect(request.database).toBe("pgmind_dev");
             expect(request.affectedRows).toBe(5);
         });
 
@@ -170,7 +170,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE users SET status = 'active'",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");
@@ -184,7 +184,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE users SET status = 'active'",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");
@@ -200,7 +200,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE users SET status = 'active'",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");
@@ -215,7 +215,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE products SET price = 500",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");
@@ -230,7 +230,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE products SET price = 500",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");
@@ -244,7 +244,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE products SET price = 500",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");
@@ -287,7 +287,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE users SET status = 'active'",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");
@@ -303,7 +303,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE users SET status = 'active'",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");
@@ -319,7 +319,7 @@ describe("ApprovalStore", () => {
             const request = store.create({
                 sql: "UPDATE users SET status = 'active'",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
             });
 
             store.updateStatus(request.id, "approved");

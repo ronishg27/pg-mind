@@ -22,8 +22,8 @@ PGMind is a **TypeScript-only MCP (Model Context Protocol) server** that connect
 The architecture is a **modular TypeScript monolith** — business logic lives in independent services under `src/modules/` (`database`, `schema`, `query`, `approval`), not inside MCP tool handlers. PGMind does **not** contain its own LLM; the MCP client provides the AI agent.
 
 **Two database connection pools:**
-- Read pool (`QUERY_DATABASE_URL`, required) — role `querymind_readonly`, read-only queries only.
-- Write pool (`WRITE_DATABASE_URL`, optional) — role configured via `WRITE_ROLE_NAME` (default `querymind_writer`), used only for approved write operations.
+- Read pool (`QUERY_DATABASE_URL`, required) — role `pgmind_readonly`, read-only queries only.
+- Write pool (`WRITE_DATABASE_URL`, optional) — role configured via `WRITE_ROLE_NAME` (default `pgmind_writer`), used only for approved write operations.
 
 **SQL parsing:** `pgsql-ast-parser` (PostgreSQL-aware AST parser), not naive string checks. **Database access:** `pg` pool directly, no ORM.
 
@@ -60,7 +60,7 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 
 ## Database and transaction rules
 
-- `WRITE_ROLE_NAME` configures the expected writer role (default `querymind_writer`).
+- `WRITE_ROLE_NAME` configures the expected writer role (default `pgmind_writer`).
 - **Runtime database and writer-role identity checks must remain** in `withWriteTransaction` — they verify `current_database()` matches the expected database and `current_user` matches the configured writer role.
 - **Do not grant superuser privileges or unnecessary PostgreSQL permissions.** Database-level role permissions are the primary enforcement boundary.
 - **Preserve rollback-failure connection disposal:** if `ROLLBACK` fails after an operation error, the connection client is discarded from the pool rather than returned for reuse.
@@ -70,7 +70,7 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 ## Architecture (what actually exists)
 
 - Entry point: `src/index.ts` — builds the MCP stdio server and registers tools (`ping`, `execute_query`, `get_database_schema`, `prepare_operation`, `execute_approved_operation`).
-- Config: `src/config/index.ts` (`QUERY_DATABASE_URL`, `WRITE_DATABASE_URL`, `writeRoleName` default `querymind_writer`).
+- Config: `src/config/index.ts` (`QUERY_DATABASE_URL`, `WRITE_DATABASE_URL`, `writeRoleName` default `pgmind_writer`).
 - Modules under `src/modules/`: `database`, `schema`, `query`, `approval`.
 - Directories `src/mcp/`, `src/ai/`, `src/infrastructure/`, `src/analysis/` **do not exist**. MCP tools are registered in `src/index.ts`.
 - `context.md` does not exist (it is gitignored).

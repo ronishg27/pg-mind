@@ -9,7 +9,7 @@ describe("OperationExecutionWorkflowService", () => {
             executeOperation: vi.fn().mockResolvedValue({
                 approvalId: "approval-123",
                 operation: "UPDATE",
-                database: "querymind_dev",
+                database: "pgmind_dev",
                 affectedRows: 2,
                 status: "executed",
             }),
@@ -28,7 +28,7 @@ describe("OperationExecutionWorkflowService", () => {
         expect(result).toEqual({
             approvalId: "approval-123",
             operation: "UPDATE",
-            database: "querymind_dev",
+            database: "pgmind_dev",
             affectedRows: 2,
             status: "executed",
             message: "UPDATE operation executed successfully.",

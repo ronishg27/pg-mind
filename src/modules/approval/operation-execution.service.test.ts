@@ -44,7 +44,7 @@ describe("OperationExecutionService", () => {
         const request = store.create({
             sql,
             operation,
-            database: "querymind_dev",
+            database: "pgmind_dev",
         });
 
         store.updateStatus(request.id, "approved");
@@ -60,7 +60,7 @@ describe("OperationExecutionService", () => {
                 databaseName: string,
                 callback: (client: unknown) => Promise<number>,
             ) => {
-                expect(databaseName).toBe("querymind_dev");
+                expect(databaseName).toBe("pgmind_dev");
 
                 return callback({
                     query: vi.fn().mockResolvedValue({
@@ -75,7 +75,7 @@ describe("OperationExecutionService", () => {
         expect(result).toEqual({
             approvalId: request.id,
             operation: "UPDATE",
-            database: "querymind_dev",
+            database: "pgmind_dev",
             affectedRows: 1,
             status: "executed",
         });
@@ -109,7 +109,7 @@ describe("OperationExecutionService", () => {
         const request = store.create({
             sql: "UPDATE products SET price = 500 WHERE id = 1",
             operation: "UPDATE",
-            database: "querymind_dev",
+            database: "pgmind_dev",
         });
 
         await expect(service.executeOperation(request.id)).rejects.toThrow(
@@ -194,7 +194,7 @@ describe("OperationExecutionService", () => {
                 ).resolves.toMatchObject({
                     approvalId: request.id,
                     operation,
-                    database: "querymind_dev",
+                    database: "pgmind_dev",
                     status: "executed",
                 });
 

@@ -42,7 +42,7 @@ Used by `execute_query`. Responsibilities:
 - Limit result size to 1 MB.
 - Report whether results were truncated (`truncated` flag).
 
-The dedicated PostgreSQL role is `querymind_readonly`.
+The dedicated PostgreSQL role is `pgmind_readonly`.
 
 **Important:** Database-level read-only permissions are the primary security boundary. Application-level SQL validation alone is not a sufficient security boundary. The read-only role must not have INSERT, UPDATE, DELETE, CREATE, or similar privileges.
 
@@ -118,12 +118,12 @@ Key constraints:
 
 | Pool | Env var | Required? | Role | Purpose |
 |------|---------|-----------|------|---------|
-| Read pool | `QUERY_DATABASE_URL` | Yes | `querymind_readonly` | Schema discovery, read-only queries, metadata |
-| Write pool | `WRITE_DATABASE_URL` | No | `writeRoleName` (default `querymind_writer`) | Execute approved write operations |
+| Read pool | `QUERY_DATABASE_URL` | Yes | `pgmind_readonly` | Schema discovery, read-only queries, metadata |
+| Write pool | `WRITE_DATABASE_URL` | No | `writeRoleName` (default `pgmind_writer`) | Execute approved write operations |
 
 The write pool is optional. If `WRITE_DATABASE_URL` is not configured, `DatabaseService` is created without a write pool, and any attempt to execute a write operation fails with `"Write pool is not configured"`.
 
-The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults to `querymind_writer`. The writer connection identity is verified at runtime in `withWriteTransaction`, so the configured role name must match the actual PostgreSQL role used by `WRITE_DATABASE_URL`.
+The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults to `pgmind_writer`. The writer connection identity is verified at runtime in `withWriteTransaction`, so the configured role name must match the actual PostgreSQL role used by `WRITE_DATABASE_URL`.
 
 ### Read transaction (`withReadOnlyTransaction`)
 
@@ -137,7 +137,7 @@ The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults t
 
 - Requires the write pool; throws `"Write pool is not configured"` if absent.
 - `BEGIN`
-- Verify connection identity: `current_database()` must equal the expected database (from the approval request), and `current_user` must equal the configured writer role (`writeRoleName`, default `querymind_writer`, overridable via `WRITE_ROLE_NAME`). A mismatch aborts the operation.
+- Verify connection identity: `current_database()` must equal the expected database (from the approval request), and `current_user` must equal the configured writer role (`writeRoleName`, default `pgmind_writer`, overridable via `WRITE_ROLE_NAME`). A mismatch aborts the operation.
 - `SET LOCAL statement_timeout = '10s'`
 - Execute callback (the exact stored SQL)
 - `COMMIT` — from this point onward a failed COMMIT has an **uncertain outcome**. If COMMIT fails, a `CommitOutcomeUnknownError` is thrown rather than assuming rollback.
