@@ -15,7 +15,6 @@ import { OperationExecutionService } from "./modules/approval/operation-executio
 import { OperationExecutionWorkflowService } from "./modules/approval/operation-execution-workflow.service.js";
 import { DiagnosticsService } from "./modules/diagnostics/diagnostics.service.js";
 import { z } from "zod";
-import config from "./config/index.js";
 import {
     registerTool,
     createReadOnlyTool,
@@ -31,57 +30,40 @@ import {
     handleValidationError,
     handleApprovalError,
 } from "./modules/mcp/mcp-response.js";
+import { initializeConnectionRegistry, getConnectionRegistry, shutdownConnectionRegistry } from "./modules/database/connection-registry.js";
+import { getDatabaseConfig } from "./config/index.js";
 
-const queryConnectionString = config.queryDatabaseUrl;
-const writeConnectionString = config.writeDatabaseUrl;
+// Module-level service instances (initialized in main)
+let database: DatabaseService;
+let queryService: QueryService;
+let schemaService: SchemaService;
+let diagnosticsService: DiagnosticsService;
+let approvalService: ApprovalService;
+let operationExecutionService: OperationExecutionService;
 
-if (!queryConnectionString) {
-    throw new Error("QUERY_DATABASE_URL is not configured");
-}
-
-const database = new DatabaseService(
-    queryConnectionString,
-    writeConnectionString,
-);
+// Shared instances
 const validator = new SqlValidator();
-const queryService = new QueryService(database, validator);
-const schemaService = new SchemaService(database);
-const diagnosticsService = new DiagnosticsService(database, schemaService, validator);
+const approvalStore = new ApprovalStore();
+const operationClassifier = new SqlOperationClassifier();
+const analysisService = new SqlAnalysisService();
+const writeSqlValidator = new WriteSqlValidator();
+const confirmationProvider = new McpApprovalConfirmationProvider(null as any); // Will be set after server creation
 
 const server = new McpServer({
     name: "pgmind",
     version: "1.0.0",
 });
 
-const approvalStore = new ApprovalStore();
-
-const operationClassifier = new SqlOperationClassifier();
-const analysisService = new SqlAnalysisService();
-
-const approvalService = new ApprovalService(
-    approvalStore,
-    operationClassifier,
-    analysisService,
-    database,
-);
-
-const confirmationProvider = new McpApprovalConfirmationProvider(server);
+// Update confirmation provider with server reference
+(confirmationProvider as any).server = server;
 
 const approvalWorkflow = new ApprovalWorkflowService(
-    approvalService,
+    null as any, // Will be set after approvalService creation
     confirmationProvider,
 );
 
-const writeSqlValidator = new WriteSqlValidator();
-
-const operationExecutionService = new OperationExecutionService(
-    approvalStore,
-    operationClassifier,
-    database,
-);
-
 const operationExecutionWorkflow = new OperationExecutionWorkflowService(
-    operationExecutionService,
+    null as any, // Will be set after operationExecutionService creation
 );
 
 // Tool: ping
@@ -344,8 +326,41 @@ registerTool(server, createReadOnlyTool(
     },
 ));
 
-async function main() {
+async function initializeServices(): Promise<void> {
+    // Initialize connection registry with all configured databases
+    const registry = await initializeConnectionRegistry(20);
+
+    // Use default connection for existing services
+    database = registry.getDefault();
+
+    // Initialize services that depend on database
+    queryService = new QueryService(database, validator);
+    schemaService = new SchemaService(database);
+    diagnosticsService = new DiagnosticsService(database, schemaService, validator);
+
+    approvalService = new ApprovalService(
+        approvalStore,
+        operationClassifier,
+        analysisService,
+        database,
+    );
+
+    operationExecutionService = new OperationExecutionService(
+        approvalStore,
+        operationClassifier,
+        database,
+    );
+
+    // Update workflow services with initialized dependencies
+    (approvalWorkflow as any).approvalService = approvalService;
+    (operationExecutionWorkflow as any).operationExecutionService = operationExecutionService;
+
+    // Verify connections
     await database.verifyConnections();
+}
+
+async function main() {
+    await initializeServices();
 
     const transport = new StdioServerTransport();
     try {
@@ -354,8 +369,10 @@ async function main() {
         console.error(
             "PGMind MCP server is running. Waiting for requests...",
         );
+        console.error(`Default database: ${getDatabaseConfig().default}`);
+        console.error(`Registered connections: ${getConnectionRegistry().names().join(", ")}`);
     } catch (error) {
-        await database.shutdown();
+        await shutdownConnectionRegistry();
         throw error;
     }
 }
@@ -375,7 +392,7 @@ async function shutdown() {
     }
 
     try {
-        await database.shutdown();
+        await shutdownConnectionRegistry();
         console.error("Database connection pools closed.");
     } catch (error) {
         console.error("Error closing database connection pools:", error);
@@ -389,6 +406,6 @@ process.on("SIGTERM", shutdown);
 
 main().catch(async (err) => {
     console.error("Error starting PGMind MCP server:", err);
-    await database.shutdown();
+    await shutdownConnectionRegistry();
     process.exit(1);
 });

@@ -1,0 +1,55 @@
+# PGMind Configuration
+# Copy this file to pg-mind.config.yaml and update with your database credentials.
+# NEVER commit pg-mind.config.yaml with real credentials!
+
+database:
+  # Default connection to use (must match one of the connection names below)
+  default: local_dev
+
+  # Named database connections
+  # Each connection must have a unique name
+  connections:
+    local_dev:
+      host: localhost
+      port: 5432
+      database: pgmind_dev
+      username: postgres
+      password: "your_password_here"
+      ssl: false
+
+    # staging:
+    #   host: staging.example.com
+    #   port: 5432
+    #   database: pgmind_staging
+    #   username: developer
+    #   password: "another_password_here"
+    #   ssl: true
+
+    # production:
+    #   host: prod.example.com
+    #   port: 5432
+    #   database: pgmind_prod
+    #   username: readonly_user
+    #   password: "production_password_here"
+    #   ssl: true
+
+  # Connection pool settings (shared across all connections)
+  # max: maximum connections per pool (each database has 2 pools: read and write)
+  # maxTotal: maximum total connections across all pools for all databases
+  pool:
+    max: 10                       # Maximum connections per pool
+    maxTotal: 100                 # Maximum total connections across all databases
+    idleTimeoutMillis: 30000      # Close idle connections after 30 seconds
+    connectionTimeoutMillis: 5000 # Wait up to 5 seconds for a connection
+
+  # Optional: Verify connection host/port (useful for preventing misconfiguration)
+  # expectedHost: localhost
+  # expectedPort: 5432
+
+  # Transaction timeouts (milliseconds)
+  statementTimeoutMs: 10000        # 10 seconds
+  lockTimeoutMs: 5000              # 5 seconds
+  idleInTransactionTimeoutMs: 30000  # 30 seconds
+
+  # Application name for PostgreSQL connection identification
+  applicationName: pgmind

@@ -1,4 +1,3 @@
-import config from "../../config/index.js";
 import { Pool, type PoolClient, type QueryResultRow, type PoolConfig } from "pg";
 
 export interface DatabaseConfig {
@@ -8,8 +7,7 @@ export interface DatabaseConfig {
     poolIdleTimeoutMs: number;
     applicationName: string;
     expectedDatabase: string;
-    expectedReadRole: string;
-    expectedWriteRole: string;
+    expectedUsername: string;
     expectedHost?: string;
     expectedPort?: number;
     statementTimeoutMs: number;
@@ -17,30 +15,11 @@ export interface DatabaseConfig {
     idleInTransactionTimeoutMs: number;
 }
 
-function getConfig(override?: Partial<DatabaseConfig>): DatabaseConfig {
-    return {
-        poolMaxRead: override?.poolMaxRead ?? config.poolMaxRead,
-        poolMaxWrite: override?.poolMaxWrite ?? config.poolMaxWrite,
-        poolConnectionTimeoutMs: override?.poolConnectionTimeoutMs ?? config.poolConnectionTimeoutMs,
-        poolIdleTimeoutMs: override?.poolIdleTimeoutMs ?? config.poolIdleTimeoutMs,
-        applicationName: override?.applicationName ?? config.applicationName,
-        expectedDatabase: override?.expectedDatabase ?? config.expectedDatabase,
-        expectedReadRole: override?.expectedReadRole ?? config.expectedReadRole,
-        expectedWriteRole: override?.expectedWriteRole ?? config.expectedWriteRole,
-        expectedHost: override?.expectedHost ?? config.expectedHost,
-        expectedPort: override?.expectedPort ?? config.expectedPort,
-        statementTimeoutMs: override?.statementTimeoutMs ?? config.statementTimeoutMs,
-        lockTimeoutMs: override?.lockTimeoutMs ?? config.lockTimeoutMs,
-        idleInTransactionTimeoutMs: override?.idleInTransactionTimeoutMs ?? config.idleInTransactionTimeoutMs,
-    };
-}
-
 export class DatabaseService {
     private readonly pool: Pool;
     private readonly writePool?: Pool;
     private readonly expectedDatabase: string;
-    private readonly expectedReadRole: string;
-    private readonly expectedWriteRole: string;
+    private readonly expectedUsername: string;
     private readonly expectedHost?: string;
     private readonly expectedPort?: number;
     private readonly statementTimeoutMs: number;
@@ -52,14 +31,14 @@ export class DatabaseService {
         writeConnectionString?: string,
         configOverride?: Partial<DatabaseConfig>,
     ) {
-        const cfg = getConfig(configOverride);
+        const cfg = configOverride ?? {};
 
         const poolConfig: PoolConfig = {
             connectionString: queryConnectionString,
-            max: cfg.poolMaxRead,
-            connectionTimeoutMillis: cfg.poolConnectionTimeoutMs,
-            idleTimeoutMillis: cfg.poolIdleTimeoutMs,
-            application_name: cfg.applicationName,
+            max: cfg.poolMaxRead ?? 10,
+            connectionTimeoutMillis: cfg.poolConnectionTimeoutMs ?? 5000,
+            idleTimeoutMillis: cfg.poolIdleTimeoutMs ?? 30000,
+            application_name: cfg.applicationName ?? "pgmind",
         };
 
         this.pool = new Pool(poolConfig);
@@ -68,23 +47,22 @@ export class DatabaseService {
         if (writeConnectionString) {
             const writePoolConfig: PoolConfig = {
                 connectionString: writeConnectionString,
-                max: cfg.poolMaxWrite,
-                connectionTimeoutMillis: cfg.poolConnectionTimeoutMs,
-                idleTimeoutMillis: cfg.poolIdleTimeoutMs,
-                application_name: cfg.applicationName,
+                max: cfg.poolMaxWrite ?? 10,
+                connectionTimeoutMillis: cfg.poolConnectionTimeoutMs ?? 5000,
+                idleTimeoutMillis: cfg.poolIdleTimeoutMs ?? 30000,
+                application_name: cfg.applicationName ?? "pgmind",
             };
             this.writePool = new Pool(writePoolConfig);
             this.setupPoolErrorHandlers(this.writePool, "write");
         }
 
-        this.expectedDatabase = cfg.expectedDatabase;
-        this.expectedReadRole = cfg.expectedReadRole;
-        this.expectedWriteRole = cfg.expectedWriteRole;
+        this.expectedDatabase = cfg.expectedDatabase ?? "";
+        this.expectedUsername = cfg.expectedUsername ?? "";
         this.expectedHost = cfg.expectedHost;
         this.expectedPort = cfg.expectedPort;
-        this.statementTimeoutMs = cfg.statementTimeoutMs;
-        this.lockTimeoutMs = cfg.lockTimeoutMs;
-        this.idleInTransactionTimeoutMs = cfg.idleInTransactionTimeoutMs;
+        this.statementTimeoutMs = cfg.statementTimeoutMs ?? 10000;
+        this.lockTimeoutMs = cfg.lockTimeoutMs ?? 5000;
+        this.idleInTransactionTimeoutMs = cfg.idleInTransactionTimeoutMs ?? 30000;
     }
 
     private setupPoolErrorHandlers(pool: Pool, poolName: string): void {
@@ -94,13 +72,13 @@ export class DatabaseService {
     }
 
     async verifyConnections(): Promise<void> {
-        await this.verifyPool(this.pool, "read", this.expectedReadRole);
+        await this.verifyPool(this.pool, "read");
         if (this.writePool) {
-            await this.verifyPool(this.writePool, "write", this.expectedWriteRole);
+            await this.verifyPool(this.writePool, "write");
         }
     }
 
-    private async verifyPool(pool: Pool, poolName: string, expectedRole: string): Promise<void> {
+    private async verifyPool(pool: Pool, poolName: string): Promise<void> {
         const client = await pool.connect();
         try {
             const identityResult = await client.query<{
@@ -124,9 +102,9 @@ export class DatabaseService {
                 );
             }
 
-            if (identity?.role !== expectedRole) {
+            if (identity?.role !== this.expectedUsername) {
                 throw new Error(
-                    `${poolName} pool role mismatch. Expected: ${expectedRole}, Got: ${identity?.role}`,
+                    `${poolName} pool user mismatch. Expected: ${this.expectedUsername}, Got: ${identity?.role}`,
                 );
             }
 
@@ -245,10 +223,10 @@ export class DatabaseService {
 
             if (
                 identity?.database !== this.expectedDatabase ||
-                identity?.role !== this.expectedWriteRole
+                identity?.role !== this.expectedUsername
             ) {
                 throw new Error(
-                    `Writer connection identity mismatch. Expected database: ${this.expectedDatabase}, role: ${this.expectedWriteRole}. Got database: ${identity?.database}, role: ${identity?.role}`,
+                    `Writer connection identity mismatch. Expected database: ${this.expectedDatabase}, user: ${this.expectedUsername}. Got database: ${identity?.database}, user: ${identity?.role}`,
                 );
             }
 

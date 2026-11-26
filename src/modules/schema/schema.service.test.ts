@@ -123,8 +123,7 @@ describeIfDocker("SchemaService Integration Tests (requires Docker)", () => {
     beforeEach(async () => {
         database = new DatabaseService(queryUrl, writeUrl, {
             expectedDatabase: "pgmind_test",
-            expectedReadRole: "postgres",
-            expectedWriteRole: "postgres",
+            expectedUsername: "postgres",
             poolMaxRead: 5,
             poolMaxWrite: 5,
         });

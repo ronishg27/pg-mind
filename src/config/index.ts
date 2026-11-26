@@ -1,62 +1,182 @@
-import { z } from "zod";
+import { loadConfiguration, getDefaultResolvedConnectionConfig, getAllResolvedConnectionConfigs } from "./configuration.loader.js";
+import type { DatabaseConfig, ResolvedConnectionConfig, ConnectionMetadata } from "./configuration.types.js";
 
-process.loadEnvFile(".env");
+// Lazy-loaded configuration
+let _databaseConfig: DatabaseConfig | null = null;
+let _configLoadError: Error | null = null;
 
-const ConfigSchema = z.object({
-    // Database connection
-    queryDatabaseUrl: z.string().url("QUERY_DATABASE_URL must be a valid PostgreSQL connection string"),
-    writeDatabaseUrl: z.string().url("WRITE_DATABASE_URL must be a valid PostgreSQL connection string").optional(),
-    
-    // Database identity verification
-    expectedDatabase: z.string().min(1, "EXPECTED_DATABASE is required"),
-    expectedReadRole: z.string().default("pgmind_readonly"),
-    expectedWriteRole: z.string().default("pgmind_writer"),
-    // Deprecated alias
-    writeRoleName: z.string().optional(),
-    expectedHost: z.string().optional(),
-    expectedPort: z.coerce.number().int().positive().optional(),
-    
-    // Pool configuration
-    poolMaxRead: z.coerce.number().int().positive().default(10),
-    poolMaxWrite: z.coerce.number().int().positive().default(10),
-    poolConnectionTimeoutMs: z.coerce.number().int().positive().default(5000),
-    poolIdleTimeoutMs: z.coerce.number().int().positive().default(30000),
-    
-    // Transaction timeouts (milliseconds)
-    statementTimeoutMs: z.coerce.number().int().positive().default(10000),
-    lockTimeoutMs: z.coerce.number().int().positive().default(5000),
-    idleInTransactionTimeoutMs: z.coerce.number().int().positive().default(30000),
-    
-    // Application
-    applicationName: z.string().default("pgmind"),
-});
-
-type Config = z.infer<typeof ConfigSchema>;
-
-const parsed = ConfigSchema.safeParse({
-    queryDatabaseUrl: process.env.QUERY_DATABASE_URL,
-    writeDatabaseUrl: process.env.WRITE_DATABASE_URL,
-    expectedDatabase: process.env.EXPECTED_DATABASE,
-    expectedReadRole: process.env.EXPECTED_READ_ROLE,
-    expectedWriteRole: process.env.EXPECTED_WRITE_ROLE || process.env.WRITE_ROLE_NAME,
-    expectedHost: process.env.EXPECTED_HOST,
-    expectedPort: process.env.EXPECTED_PORT,
-    poolMaxRead: process.env.POOL_MAX_READ,
-    poolMaxWrite: process.env.POOL_MAX_WRITE,
-    poolConnectionTimeoutMs: process.env.POOL_CONNECTION_TIMEOUT_MS,
-    poolIdleTimeoutMs: process.env.POOL_IDLE_TIMEOUT_MS,
-    statementTimeoutMs: process.env.STATEMENT_TIMEOUT_MS,
-    lockTimeoutMs: process.env.LOCK_TIMEOUT_MS,
-    idleInTransactionTimeoutMs: process.env.IDLE_IN_TRANSACTION_TIMEOUT_MS,
-    applicationName: process.env.APPLICATION_NAME,
-});
-
-if (!parsed.success) {
-    const errors = parsed.error.issues.map((e) => `${e.path.map(String).join(".")}: ${e.message}`).join("\n");
-    throw new Error(`Configuration validation failed:\n${errors}`);
+/**
+ * Get the database configuration, loading it on first access.
+ */
+function getDatabaseConfig(): DatabaseConfig {
+    if (_configLoadError) {
+        throw _configLoadError;
+    }
+    if (!_databaseConfig) {
+        try {
+            _databaseConfig = loadConfiguration();
+        } catch (error) {
+            _configLoadError = error instanceof Error ? error : new Error(String(error));
+            throw _configLoadError;
+        }
+    }
+    return _databaseConfig;
 }
 
-const config = parsed.data;
+/**
+ * Reset configuration for testing.
+ * @internal
+ */
+export function __resetConfigForTesting(): void {
+    _databaseConfig = null;
+    _configLoadError = null;
+}
 
-export default config;
-export type { Config };
+/**
+ * Set configuration directly for testing.
+ * @internal
+ */
+export function __setConfigForTesting(config: DatabaseConfig): void {
+    _databaseConfig = config;
+    _configLoadError = null;
+}
+
+// Create a proxy object that provides both the function-like access and property access
+// for backward compatibility
+const databaseConfigProxy = new Proxy({} as DatabaseConfig, {
+    get(_target, prop: string | symbol) {
+        if (prop === "default") {
+            return getDatabaseConfig().default;
+        }
+        if (prop === "connections") {
+            return getDatabaseConfig().connections;
+        }
+        if (prop === "pool") {
+            return getDatabaseConfig().pool;
+        }
+        if (prop === "expectedHost") {
+            return getDatabaseConfig().expectedHost;
+        }
+        if (prop === "expectedPort") {
+            return getDatabaseConfig().expectedPort;
+        }
+        if (prop === "statementTimeoutMs") {
+            return getDatabaseConfig().statementTimeoutMs;
+        }
+        if (prop === "lockTimeoutMs") {
+            return getDatabaseConfig().lockTimeoutMs;
+        }
+        if (prop === "idleInTransactionTimeoutMs") {
+            return getDatabaseConfig().idleInTransactionTimeoutMs;
+        }
+        if (prop === "applicationName") {
+            return getDatabaseConfig().applicationName;
+        }
+        // For any other property, delegate to the actual config
+        const config = getDatabaseConfig();
+        return (config as any)[prop];
+    },
+    ownKeys() {
+        const config = getDatabaseConfig();
+        return Reflect.ownKeys(config);
+    },
+    getOwnPropertyDescriptor(_target, prop: string | symbol) {
+        const config = getDatabaseConfig();
+        return Reflect.getOwnPropertyDescriptor(config, prop);
+    },
+});
+
+// Backward compatibility: provide the default connection config in the old format
+// This allows existing code to work without changes
+const ConfigSchema = {
+    // Database connection (backward compatible)
+    get queryDatabaseUrl(): string {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.connectionString;
+    },
+    get writeDatabaseUrl(): string | undefined {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.writeConnectionString;
+    },
+
+    // Database identity verification
+    get expectedDatabase(): string {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.expectedDatabase;
+    },
+    get expectedUsername(): string {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.expectedUsername;
+    },
+    get expectedHost(): string | undefined {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.expectedHost;
+    },
+    get expectedPort(): number | undefined {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.expectedPort;
+    },
+
+    // Pool configuration
+    get poolMaxRead(): number {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.poolMaxRead;
+    },
+    get poolMaxWrite(): number {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.poolMaxWrite;
+    },
+    get poolConnectionTimeoutMs(): number {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.poolConnectionTimeoutMs;
+    },
+    get poolIdleTimeoutMs(): number {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.poolIdleTimeoutMs;
+    },
+
+    // Transaction timeouts (milliseconds)
+    get statementTimeoutMs(): number {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.statementTimeoutMs;
+    },
+    get lockTimeoutMs(): number {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.lockTimeoutMs;
+    },
+    get idleInTransactionTimeoutMs(): number {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.idleInTransactionTimeoutMs;
+    },
+
+    // Application
+    get applicationName(): string {
+        const config = getDatabaseConfig();
+        const defaultResolved = getDefaultResolvedConnectionConfig(config);
+        return defaultResolved.applicationName;
+    },
+};
+
+// Export the new multi-database configuration system
+export { databaseConfigProxy as databaseConfig, loadConfiguration, getDefaultResolvedConnectionConfig, getAllResolvedConnectionConfigs };
+export type { DatabaseConfig, ResolvedConnectionConfig, ConnectionMetadata };
+
+// Also export the function for internal use
+export { getDatabaseConfig };
+
+// Backward compatible default export
+export default ConfigSchema;
+export type Config = typeof ConfigSchema;

@@ -17,6 +17,9 @@ build/
 .env.test.local
 .env.production.local
 
+# Database configuration (contains credentials)
+pg-mind.config.yaml
+
 # IDE
 .idea/
 .vscode/

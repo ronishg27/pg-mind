@@ -75,8 +75,7 @@ describeIfDocker("Approval Workflow Integration Tests (requires Docker)", () => 
     beforeEach(async () => {
         database = new DatabaseService(queryUrl, writerUrl, {
             expectedDatabase: "pgmind_test",
-            expectedReadRole: "postgres",
-            expectedWriteRole: "pgmind_writer",
+            expectedUsername: "pgmind_writer",
             poolMaxRead: 5,
             poolMaxWrite: 5,
         });

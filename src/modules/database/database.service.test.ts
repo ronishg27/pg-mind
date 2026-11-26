@@ -81,8 +81,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
     beforeEach(async () => {
         database = new DatabaseService(queryUrl, writeUrl, {
             expectedDatabase: "pgmind_test",
-            expectedReadRole: "postgres",
-            expectedWriteRole: "postgres",
+            expectedUsername: "postgres",
             poolMaxRead: 5,
             poolMaxWrite: 5,
         });
@@ -105,30 +104,27 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should reject mismatched database name", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "wrong_database",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
             });
             await expect(db.verifyConnections()).rejects.toThrow("database mismatch");
             await db.shutdown();
         });
 
-        it("should reject mismatched read role", async () => {
+        it("should reject mismatched username", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "wrong_role",
-                expectedWriteRole: "postgres",
+                expectedUsername: "wrong_user",
             });
-            await expect(db.verifyConnections()).rejects.toThrow("role mismatch");
+            await expect(db.verifyConnections()).rejects.toThrow("user mismatch");
             await db.shutdown();
         });
 
-        it("should reject mismatched write role", async () => {
+        it("should reject mismatched write username", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "wrong_role",
+                expectedUsername: "wrong_user",
             });
-            await expect(db.verifyConnections()).rejects.toThrow("role mismatch");
+            await expect(db.verifyConnections()).rejects.toThrow("user mismatch");
             await db.shutdown();
         });
     });
@@ -145,8 +141,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should enforce statement_timeout", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 statementTimeoutMs: 100,
             });
             await db.verifyConnections();
@@ -162,8 +157,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should enforce lock_timeout", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 lockTimeoutMs: 100,
             });
             await db.verifyConnections();
@@ -187,8 +181,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should enforce idle_in_transaction_session_timeout", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 idleInTransactionTimeoutMs: 100,
             });
             await db.verifyConnections();
@@ -245,18 +238,16 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should verify writer identity before execution", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "wrong_role",
+                expectedUsername: "wrong_user",
             });
-            await expect(db.verifyConnections()).rejects.toThrow("role mismatch");
+            await expect(db.verifyConnections()).rejects.toThrow("user mismatch");
             await db.shutdown();
         });
 
         it("should throw CommitOutcomeUnknownError on commit failure", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 statementTimeoutMs: 10,
             });
             await db.verifyConnections();
@@ -273,8 +264,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should discard client after CommitOutcomeUnknownError", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 statementTimeoutMs: 10,
             });
             await db.verifyConnections();
@@ -311,8 +301,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should enforce statement_timeout", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 statementTimeoutMs: 100,
             });
             await db.verifyConnections();
@@ -328,8 +317,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should enforce lock_timeout", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 lockTimeoutMs: 100,
             });
             await db.verifyConnections();
@@ -353,8 +341,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should enforce idle_in_transaction_session_timeout", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 idleInTransactionTimeoutMs: 100,
             });
             await db.verifyConnections();
@@ -372,8 +359,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should respect poolMaxRead", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 poolMaxRead: 2,
             });
             await db.verifyConnections();
@@ -392,8 +378,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should respect poolMaxWrite", async () => {
             const db = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 poolMaxWrite: 2,
             });
             await db.verifyConnections();
@@ -419,14 +404,13 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         });
     });
 
-    describe("read-only role enforcement", () => {
+    describe("read-only transaction enforcement", () => {
         let readonlyDatabase: DatabaseService;
 
         beforeEach(async () => {
             readonlyDatabase = new DatabaseService(readonlyUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "pgmind_readonly",
-                expectedWriteRole: "pgmind_writer",
+                expectedUsername: "pgmind_readonly",
             });
             await readonlyDatabase.verifyConnections();
         });
@@ -443,7 +427,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
             expect(result).toBe(1);
         });
 
-        it("should reject INSERT via read pool", async () => {
+        it("should reject INSERT via read-only transaction", async () => {
             await expect(
                 readonlyDatabase.withReadOnlyTransaction(async (client) => {
                     await client.query("INSERT INTO test_table (name, value) VALUES ('test', 1)");
@@ -451,7 +435,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
             ).rejects.toThrow(/permission denied|readonly/i);
         });
 
-        it("should reject UPDATE via read pool", async () => {
+        it("should reject UPDATE via read-only transaction", async () => {
             await expect(
                 readonlyDatabase.withReadOnlyTransaction(async (client) => {
                     await client.query("UPDATE test_table SET value = 2 WHERE id = 1");
@@ -459,7 +443,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
             ).rejects.toThrow(/permission denied|readonly/i);
         });
 
-        it("should reject DELETE via read pool", async () => {
+        it("should reject DELETE via read-only transaction", async () => {
             await expect(
                 readonlyDatabase.withReadOnlyTransaction(async (client) => {
                     await client.query("DELETE FROM test_table WHERE id = 1");
@@ -467,7 +451,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
             ).rejects.toThrow(/permission denied|readonly/i);
         });
 
-        it("should reject DDL via read pool", async () => {
+        it("should reject DDL via read-only transaction", async () => {
             await expect(
                 readonlyDatabase.withReadOnlyTransaction(async (client) => {
                     await client.query("CREATE TABLE temp_ddl (id INT)");
@@ -476,14 +460,13 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         });
     });
 
-    describe("writer role enforcement", () => {
+    describe("write transaction enforcement", () => {
         let writerDatabase: DatabaseService;
 
         beforeEach(async () => {
             writerDatabase = new DatabaseService(queryUrl, writerUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "pgmind_writer",
+                expectedUsername: "pgmind_writer",
             });
             await writerDatabase.verifyConnections();
         });
@@ -662,8 +645,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         beforeEach(async () => {
             writerDatabase = new DatabaseService(queryUrl, writerUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "pgmind_writer",
+                expectedUsername: "pgmind_writer",
             });
             await writerDatabase.verifyConnections();
         });
@@ -758,8 +740,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should reject invalid connection strings", async () => {
             const badDb = new DatabaseService("postgresql://invalid:invalid@localhost:9999/nonexistent", undefined, {
                 expectedDatabase: "nonexistent",
-                expectedReadRole: "invalid",
-                expectedWriteRole: "invalid",
+                expectedUsername: "invalid",
             });
             await expect(badDb.verifyConnections()).rejects.toThrow();
             
@@ -769,8 +750,7 @@ describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
         it("should handle connection pool exhaustion gracefully", async () => {
             const smallDb = new DatabaseService(queryUrl, writeUrl, {
                 expectedDatabase: "pgmind_test",
-                expectedReadRole: "postgres",
-                expectedWriteRole: "postgres",
+                expectedUsername: "postgres",
                 poolMaxRead: 2,
                 poolMaxWrite: 2,
             });
