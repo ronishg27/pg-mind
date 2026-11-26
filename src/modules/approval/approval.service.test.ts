@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApprovalService } from "./approval.service.js";
+import { SqlAnalysisService } from "../query/sql-analysis.service.js";
 
 describe("ApprovalService", () => {
     let service: ApprovalService;
     let approvalStore: any;
     let classifier: any;
+    let analysisService: any;
     let databaseService: any;
 
     beforeEach(() => {
@@ -19,6 +21,10 @@ describe("ApprovalService", () => {
             classify: vi.fn(),
         };
 
+        analysisService = {
+            analyzeWrite: vi.fn(),
+        };
+
         databaseService = {
             query: vi.fn().mockResolvedValue([{ database: "pgmind_dev" }]),
         };
@@ -26,6 +32,7 @@ describe("ApprovalService", () => {
         service = new ApprovalService(
             approvalStore,
             classifier,
+            analysisService,
             databaseService,
         );
     });
@@ -34,10 +41,14 @@ describe("ApprovalService", () => {
         it("should create an approval request for a supported write operation", async () => {
             const sql = "UPDATE users SET status = 'active'";
 
-            classifier.classify.mockReturnValue({
+            analysisService.analyzeWrite.mockReturnValue({
                 operation: "UPDATE",
                 category: "write",
+                isSupported: true,
+                validationErrors: [],
                 requiresApproval: true,
+                statementCount: 1,
+                statementType: "update",
             });
 
             const result = await service.prepareOperation(sql);
@@ -52,40 +63,52 @@ describe("ApprovalService", () => {
         });
 
         it("should reject read operations", async () => {
-            classifier.classify.mockReturnValue({
+            analysisService.analyzeWrite.mockReturnValue({
                 operation: "SELECT",
                 category: "read",
+                isSupported: false,
+                validationErrors: ["Only write operations are allowed"],
                 requiresApproval: false,
+                statementCount: 1,
+                statementType: "select",
             });
 
             await expect(
                 service.prepareOperation("SELECT * FROM users"),
             ).rejects.toThrow(
-                "Only supported write operations can be prepared for approval.",
+                "Unsupported write operation: Only write operations are allowed",
             );
 
             expect(approvalStore.create).not.toHaveBeenCalled();
         });
 
         it("should reject unknown operations", async () => {
-            classifier.classify.mockReturnValue({
+            analysisService.analyzeWrite.mockReturnValue({
                 operation: "OTHER",
                 category: "unknown",
+                isSupported: false,
+                validationErrors: ["Operation OTHER is not supported"],
                 requiresApproval: true,
+                statementCount: 1,
+                statementType: "explain",
             });
 
             await expect(
                 service.prepareOperation("EXPLAIN SELECT * FROM users"),
             ).rejects.toThrow(
-                "Only supported write operations can be prepared for approval.",
+                "Unsupported write operation: Operation OTHER is not supported",
             );
         });
 
         it("should reject when the database cannot be identified", async () => {
-            classifier.classify.mockReturnValue({
+            analysisService.analyzeWrite.mockReturnValue({
                 operation: "DELETE",
                 category: "write",
+                isSupported: true,
+                validationErrors: [],
                 requiresApproval: true,
+                statementCount: 1,
+                statementType: "delete",
             });
 
             databaseService.query.mockResolvedValue([]);

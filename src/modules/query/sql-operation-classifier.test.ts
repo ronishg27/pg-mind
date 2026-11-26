@@ -146,30 +146,37 @@ describe("SqlOperationClassifier", () => {
     });
 
     describe("Invalid SQL", () => {
-        it("should reject empty SQL", () => {
-            expect(() => classifier.classify("")).toThrow();
+        it("should classify empty SQL as unknown", () => {
+            const result = classifier.classify("");
+            expect(result.category).toBe("unknown");
+            expect(result.operation).toBe("OTHER");
+            expect(result.requiresApproval).toBe(false);
         });
 
-        it("should reject invalid SQL syntax", () => {
-            expect(() => classifier.classify("SELEC * FORM users")).toThrow();
+        it("should classify invalid SQL syntax as unknown", () => {
+            const result = classifier.classify("SELEC * FORM users");
+            expect(result.category).toBe("unknown");
+            expect(result.operation).toBe("OTHER");
         });
 
         it.each(["DROP SCHEMA test_schema", "DROP VIEW active_users"])(
-            "should reject unsupported DDL: %s",
+            "should classify unsupported DDL as unknown: %s",
             (sql) => {
-                expect(() => classifier.classify(sql)).toThrow();
+                const result = classifier.classify(sql);
+                expect(result.category).toBe("unknown");
+                expect(result.operation).toBe("OTHER");
             },
         );
-        it("should reject multiple statements", () => {
-            expect(() => classifier.classify("SELECT 1; SELECT 2")).toThrow(
-                "Expected exactly one SQL statement.",
-            );
+        it("should classify multiple statements as unknown", () => {
+            const result = classifier.classify("SELECT 1; SELECT 2");
+            expect(result.category).toBe("unknown");
+            expect(result.operation).toBe("OTHER");
         });
 
-        it("should reject unsupported SQL syntax", () => {
-            expect(() =>
-                classifier.classify("EXPLAIN SELECT * FROM users"),
-            ).toThrow();
+        it("should classify unsupported SQL syntax as unknown", () => {
+            const result = classifier.classify("EXPLAIN SELECT * FROM users");
+            expect(result.category).toBe("unknown");
+            expect(result.operation).toBe("OTHER");
         });
     });
 });

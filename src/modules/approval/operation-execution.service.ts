@@ -1,5 +1,4 @@
 import type { ApprovalStore } from "./approval.store.js";
-import type { WriteSqlValidator } from "../query/write-sql-validator.js";
 import type { SqlOperationClassifier } from "../query/sql-operation-classifier.js";
 import type { DatabaseService } from "../database/database.service.js";
 import { CommitOutcomeUnknownError } from "../database/database.service.js";
@@ -8,7 +7,6 @@ import type { OperationExecutionResult } from "./approval.types.js";
 export class OperationExecutionService {
     constructor(
         private readonly approvalStore: ApprovalStore,
-        private readonly validator: WriteSqlValidator,
         private readonly classifier: SqlOperationClassifier,
         private readonly databaseService: DatabaseService,
     ) {}
@@ -25,14 +23,6 @@ export class OperationExecutionService {
         if (request.status !== "approved") {
             throw new Error(
                 `Approval request with ID ${approvalId} is not approved. Current status: ${request.status}`,
-            );
-        }
-
-        const validation = this.validator.validate(request.sql);
-
-        if (!validation.valid) {
-            throw new Error(
-                `SQL validation failed for approval request with ID ${approvalId}. Reason: ${validation.reason}`,
             );
         }
 

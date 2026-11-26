@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DatabaseService } from "../database/database.service.js";
 import { SqlOperationClassifier } from "../query/sql-operation-classifier.js";
-import { WriteSqlValidator } from "../query/write-sql-validator.js";
 import { ApprovalStore } from "./approval.store.js";
 import { OperationExecutionService } from "./operation-execution.service.js";
 import { CommitOutcomeUnknownError } from "../database/database.service.js";
@@ -23,7 +22,6 @@ describe("OperationExecutionService", () => {
 
         service = new OperationExecutionService(
             store,
-            new WriteSqlValidator(new SqlOperationClassifier()),
             new SqlOperationClassifier(),
             database as unknown as DatabaseService,
         );
@@ -200,7 +198,7 @@ describe("OperationExecutionService", () => {
             );
 
             await expect(service.executeOperation(request.id)).rejects.toThrow(
-                "SQL validation failed",
+                "Operation SELECT is not supported for execution",
             );
 
             expect(store.getById(request.id)?.status).toBe("approved");
@@ -213,7 +211,9 @@ describe("OperationExecutionService", () => {
                 "CREATE",
             );
 
-            await expect(service.executeOperation(request.id)).rejects.toThrow();
+            await expect(service.executeOperation(request.id)).rejects.toThrow(
+                "Operation OTHER is not supported for execution",
+            );
 
             expect(store.getById(request.id)?.status).toBe("approved");
             expect(database.withWriteTransaction).not.toHaveBeenCalled();
@@ -225,7 +225,9 @@ describe("OperationExecutionService", () => {
                 "DROP",
             );
 
-            await expect(service.executeOperation(request.id)).rejects.toThrow();
+            await expect(service.executeOperation(request.id)).rejects.toThrow(
+                "Operation OTHER is not supported for execution",
+            );
 
             expect(store.getById(request.id)?.status).toBe("approved");
             expect(database.withWriteTransaction).not.toHaveBeenCalled();
@@ -252,7 +254,7 @@ describe("OperationExecutionService", () => {
             );
 
             await expect(service.executeOperation(request.id)).rejects.toThrow(
-                "SQL validation failed",
+                "Operation OTHER is not supported for execution",
             );
 
             expect(store.getById(request.id)?.status).toBe("approved");

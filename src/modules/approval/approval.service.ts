@@ -1,20 +1,22 @@
 import { DatabaseService } from "../database/database.service.js";
 import { SqlOperationClassifier } from "../query/sql-operation-classifier.js";
+import { SqlAnalysisService } from "../query/sql-analysis.service.js";
 import { ApprovalStore } from "./approval.store.js";
 
 export class ApprovalService {
     constructor(
         private readonly approvalStore: ApprovalStore,
         private readonly classifier: SqlOperationClassifier,
+        private readonly analysisService: SqlAnalysisService,
         private readonly databaseService: DatabaseService,
     ) {}
 
     async prepareOperation(sql: string) {
-        const classification = this.classifier.classify(sql);
+        const analysis = this.analysisService.analyzeWrite(sql);
 
-        if (classification.category !== "write") {
+        if (!analysis.isSupported) {
             throw new Error(
-                "Only supported write operations can be prepared for approval.",
+                `Unsupported write operation: ${analysis.validationErrors.join("; ")}`,
             );
         }
 
@@ -30,7 +32,7 @@ export class ApprovalService {
 
         return this.approvalStore.create({
             sql,
-            operation: classification.operation,
+            operation: analysis.operation,
             database,
         });
     }

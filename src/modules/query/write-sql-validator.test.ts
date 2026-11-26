@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { SqlOperationClassifier } from "./sql-operation-classifier.js";
 import { WriteSqlValidator } from "./write-sql-validator.js";
 
 describe("WriteSqlValidator", () => {
-    const classifier = new SqlOperationClassifier();
-    const validator = new WriteSqlValidator(classifier);
+    const validator = new WriteSqlValidator();
 
     describe("Supported write operations", () => {
         it("should allow INSERT", () => {

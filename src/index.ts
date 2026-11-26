@@ -10,6 +10,7 @@ import { ApprovalWorkflowService } from "./modules/approval/approval-workflow.se
 import { McpApprovalConfirmationProvider } from "./modules/approval/mcp-approval-confirmation.provider.js";
 import { SqlOperationClassifier } from "./modules/query/sql-operation-classifier.js";
 import { WriteSqlValidator } from "./modules/query/write-sql-validator.js";
+import { SqlAnalysisService } from "./modules/query/sql-analysis.service.js";
 import { OperationExecutionService } from "./modules/approval/operation-execution.service.js";
 import { OperationExecutionWorkflowService } from "./modules/approval/operation-execution-workflow.service.js";
 import { z } from "zod";
@@ -38,10 +39,12 @@ const server = new McpServer({
 const approvalStore = new ApprovalStore();
 
 const operationClassifier = new SqlOperationClassifier();
+const analysisService = new SqlAnalysisService();
 
 const approvalService = new ApprovalService(
     approvalStore,
     operationClassifier,
+    analysisService,
     database,
 );
 
@@ -52,11 +55,10 @@ const approvalWorkflow = new ApprovalWorkflowService(
     confirmationProvider,
 );
 
-const writeSqlValidator = new WriteSqlValidator(operationClassifier);
+const writeSqlValidator = new WriteSqlValidator();
 
 const operationExecutionService = new OperationExecutionService(
     approvalStore,
-    writeSqlValidator,
     operationClassifier,
     database,
 );

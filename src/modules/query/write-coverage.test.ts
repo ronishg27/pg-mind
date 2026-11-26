@@ -51,14 +51,13 @@ const EXECUTION_ALLOWLIST = [
 
 describe("Write operation coverage across layers", () => {
     const classifier = new SqlOperationClassifier();
-    const validator = new WriteSqlValidator(classifier);
+    const validator = new WriteSqlValidator();
     const store = new ApprovalStore();
     const database = {
         withWriteTransaction: vi.fn(),
     } as unknown as DatabaseService;
     const service = new OperationExecutionService(
         store,
-        validator,
         classifier,
         database,
     );
@@ -139,7 +138,12 @@ describe("Write operation coverage across layers", () => {
             const validation = validator.validate(sql);
             expect(validation.valid).toBe(false);
 
-            // Execution service must reject because the validator runs first.
+            // Classifier recognizes the CTE as DELETE (write), not SELECT
+            const classification = classifier.classify(sql);
+            expect(classification.category).toBe("write");
+            expect(classification.operation).toBe("DELETE");
+
+            // Execution service rejects due to operation mismatch
             const request = store.create({
                 sql,
                 operation: "SELECT",
@@ -148,7 +152,7 @@ describe("Write operation coverage across layers", () => {
             store.updateStatus(request.id, "approved");
 
             expect(() => service.prepareExecution(request.id)).toThrow(
-                /SQL validation failed/,
+                "Operation mismatch: expected SELECT, but got DELETE.",
             );
         });
 
@@ -219,8 +223,9 @@ describe("Write operation coverage across layers", () => {
             });
             store.updateStatus(request.id, "approved");
 
+            // Classifier returns OTHER for invalid SQL, so execution service rejects
             expect(() => service.prepareExecution(request.id)).toThrow(
-                /SQL validation failed|Expected exactly one/,
+                "Operation OTHER is not supported for execution",
             );
         });
     });
