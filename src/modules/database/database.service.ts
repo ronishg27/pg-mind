@@ -1,6 +1,40 @@
 import config from "../../config/index.js";
 import { Pool, type PoolClient, type QueryResultRow, type PoolConfig } from "pg";
 
+export interface DatabaseConfig {
+    poolMaxRead: number;
+    poolMaxWrite: number;
+    poolConnectionTimeoutMs: number;
+    poolIdleTimeoutMs: number;
+    applicationName: string;
+    expectedDatabase: string;
+    expectedReadRole: string;
+    expectedWriteRole: string;
+    expectedHost?: string;
+    expectedPort?: number;
+    statementTimeoutMs: number;
+    lockTimeoutMs: number;
+    idleInTransactionTimeoutMs: number;
+}
+
+function getConfig(override?: Partial<DatabaseConfig>): DatabaseConfig {
+    return {
+        poolMaxRead: override?.poolMaxRead ?? config.poolMaxRead,
+        poolMaxWrite: override?.poolMaxWrite ?? config.poolMaxWrite,
+        poolConnectionTimeoutMs: override?.poolConnectionTimeoutMs ?? config.poolConnectionTimeoutMs,
+        poolIdleTimeoutMs: override?.poolIdleTimeoutMs ?? config.poolIdleTimeoutMs,
+        applicationName: override?.applicationName ?? config.applicationName,
+        expectedDatabase: override?.expectedDatabase ?? config.expectedDatabase,
+        expectedReadRole: override?.expectedReadRole ?? config.expectedReadRole,
+        expectedWriteRole: override?.expectedWriteRole ?? config.expectedWriteRole,
+        expectedHost: override?.expectedHost ?? config.expectedHost,
+        expectedPort: override?.expectedPort ?? config.expectedPort,
+        statementTimeoutMs: override?.statementTimeoutMs ?? config.statementTimeoutMs,
+        lockTimeoutMs: override?.lockTimeoutMs ?? config.lockTimeoutMs,
+        idleInTransactionTimeoutMs: override?.idleInTransactionTimeoutMs ?? config.idleInTransactionTimeoutMs,
+    };
+}
+
 export class DatabaseService {
     private readonly pool: Pool;
     private readonly writePool?: Pool;
@@ -9,14 +43,23 @@ export class DatabaseService {
     private readonly expectedWriteRole: string;
     private readonly expectedHost?: string;
     private readonly expectedPort?: number;
+    private readonly statementTimeoutMs: number;
+    private readonly lockTimeoutMs: number;
+    private readonly idleInTransactionTimeoutMs: number;
 
-    constructor(queryConnectionString: string, writeConnectionString?: string) {
+    constructor(
+        queryConnectionString: string,
+        writeConnectionString?: string,
+        configOverride?: Partial<DatabaseConfig>,
+    ) {
+        const cfg = getConfig(configOverride);
+
         const poolConfig: PoolConfig = {
             connectionString: queryConnectionString,
-            max: config.poolMaxRead,
-            connectionTimeoutMillis: config.poolConnectionTimeoutMs,
-            idleTimeoutMillis: config.poolIdleTimeoutMs,
-            application_name: config.applicationName,
+            max: cfg.poolMaxRead,
+            connectionTimeoutMillis: cfg.poolConnectionTimeoutMs,
+            idleTimeoutMillis: cfg.poolIdleTimeoutMs,
+            application_name: cfg.applicationName,
         };
 
         this.pool = new Pool(poolConfig);
@@ -25,20 +68,23 @@ export class DatabaseService {
         if (writeConnectionString) {
             const writePoolConfig: PoolConfig = {
                 connectionString: writeConnectionString,
-                max: config.poolMaxWrite,
-                connectionTimeoutMillis: config.poolConnectionTimeoutMs,
-                idleTimeoutMillis: config.poolIdleTimeoutMs,
-                application_name: config.applicationName,
+                max: cfg.poolMaxWrite,
+                connectionTimeoutMillis: cfg.poolConnectionTimeoutMs,
+                idleTimeoutMillis: cfg.poolIdleTimeoutMs,
+                application_name: cfg.applicationName,
             };
             this.writePool = new Pool(writePoolConfig);
             this.setupPoolErrorHandlers(this.writePool, "write");
         }
 
-        this.expectedDatabase = config.expectedDatabase;
-        this.expectedReadRole = config.expectedReadRole;
-        this.expectedWriteRole = config.expectedWriteRole;
-        this.expectedHost = config.expectedHost;
-        this.expectedPort = config.expectedPort;
+        this.expectedDatabase = cfg.expectedDatabase;
+        this.expectedReadRole = cfg.expectedReadRole;
+        this.expectedWriteRole = cfg.expectedWriteRole;
+        this.expectedHost = cfg.expectedHost;
+        this.expectedPort = cfg.expectedPort;
+        this.statementTimeoutMs = cfg.statementTimeoutMs;
+        this.lockTimeoutMs = cfg.lockTimeoutMs;
+        this.idleInTransactionTimeoutMs = cfg.idleInTransactionTimeoutMs;
     }
 
     private setupPoolErrorHandlers(pool: Pool, poolName: string): void {
@@ -131,9 +177,9 @@ export class DatabaseService {
         try {
             await client.query("BEGIN READ ONLY");
 
-            await client.query(`SET LOCAL statement_timeout = '${config.statementTimeoutMs}ms'`);
-            await client.query(`SET LOCAL lock_timeout = '${config.lockTimeoutMs}ms'`);
-            await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${config.idleInTransactionTimeoutMs}ms'`);
+            await client.query(`SET LOCAL statement_timeout = '${this.statementTimeoutMs}ms'`);
+            await client.query(`SET LOCAL lock_timeout = '${this.lockTimeoutMs}ms'`);
+            await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${this.idleInTransactionTimeoutMs}ms'`);
 
             const result = await callback(client);
 
@@ -144,7 +190,6 @@ export class DatabaseService {
             try {
                 await client.query("ROLLBACK");
             } catch (rollbackError) {
-                // Rollback failed — connection state uncertain, discard the client
                 client.release(rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
                 throw error;
             }
@@ -205,9 +250,9 @@ export class DatabaseService {
                 );
             }
 
-            await client.query(`SET LOCAL statement_timeout = '${config.statementTimeoutMs}ms'`);
-            await client.query(`SET LOCAL lock_timeout = '${config.lockTimeoutMs}ms'`);
-            await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${config.idleInTransactionTimeoutMs}ms'`);
+            await client.query(`SET LOCAL statement_timeout = '${this.statementTimeoutMs}ms'`);
+            await client.query(`SET LOCAL lock_timeout = '${this.lockTimeoutMs}ms'`);
+            await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${this.idleInTransactionTimeoutMs}ms'`);
 
             const result = await callback(client);
 
@@ -223,15 +268,12 @@ export class DatabaseService {
             return result;
         } catch (error) {
             if (commitAttempted) {
-                // COMMIT was attempted but failed — outcome unknown, discard connection
                 throw error;
             }
 
-            // Failure before commit — safe to rollback
             try {
                 await client.query("ROLLBACK");
             } catch (rollbackError) {
-                // Rollback also failed — discard connection, preserve original error
                 const rollbackErr = rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError));
                 if (error instanceof Error) {
                     error.message += ` | Rollback also failed: ${rollbackErr.message}`;
@@ -243,7 +285,6 @@ export class DatabaseService {
             throw error;
         } finally {
             if (commitAttempted && commitError) {
-                // COMMIT failed — discard the client
                 client.release(commitError);
             } else {
                 client.release();

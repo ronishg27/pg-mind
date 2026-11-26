@@ -2,7 +2,6 @@ import { vi } from "vitest";
 
 vi.stubEnv("QUERY_DATABASE_URL", "postgresql://test:test@localhost:5432/test");
 vi.stubEnv("WRITE_DATABASE_URL", "postgresql://test:test@localhost:5432/test");
-vi.stubEnv("EXPECTED_DATABASE", "test");
 vi.stubEnv("EXPECTED_READ_ROLE", "test_role");
 vi.stubEnv("EXPECTED_WRITE_ROLE", "test_role");
 vi.stubEnv("POOL_MAX_READ", "5");
