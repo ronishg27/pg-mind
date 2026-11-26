@@ -82,7 +82,6 @@ export class OperationExecutionService {
 
         try {
             affectedRows = await this.databaseService.withWriteTransaction(
-                execution.database,
                 async (client) => {
                     const result = await client.query(execution.sql);
 

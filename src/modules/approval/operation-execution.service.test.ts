@@ -56,12 +56,7 @@ describe("OperationExecutionService", () => {
         const request = createApprovedRequest();
 
         database.withWriteTransaction.mockImplementation(
-            async (
-                databaseName: string,
-                callback: (client: unknown) => Promise<number>,
-            ) => {
-                expect(databaseName).toBe("pgmind_dev");
-
+            async (callback: (client: unknown) => Promise<number>) => {
                 return callback({
                     query: vi.fn().mockResolvedValue({
                         rowCount: 1,
@@ -123,10 +118,7 @@ describe("OperationExecutionService", () => {
         const request = createApprovedRequest();
 
         database.withWriteTransaction.mockImplementation(
-            async (
-                _databaseName: string,
-                callback: (client: unknown) => Promise<number>,
-            ) => {
+            async (callback: (client: unknown) => Promise<number>) => {
                 return callback({
                     query: vi.fn().mockResolvedValue({
                         rowCount: 1,
@@ -177,10 +169,7 @@ describe("OperationExecutionService", () => {
                 const request = createApprovedRequest(sql, operation);
 
                 database.withWriteTransaction.mockImplementation(
-                    async (
-                        _databaseName: string,
-                        callback: (client: unknown) => Promise<number>,
-                    ) => {
+                    async (callback: (client: unknown) => Promise<number>) => {
                         return callback({
                             query: vi.fn().mockResolvedValue({
                                 rowCount: 0,
@@ -274,10 +263,7 @@ describe("OperationExecutionService", () => {
             const request = createApprovedRequest();
 
             database.withWriteTransaction.mockImplementation(
-                async (
-                    _databaseName: string,
-                    callback: (client: unknown) => Promise<number>,
-                ) => {
+                async (callback: (client: unknown) => Promise<number>) => {
                     return callback({
                         query: vi.fn().mockResolvedValue({
                             rowCount: 1,

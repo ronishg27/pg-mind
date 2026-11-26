@@ -13,10 +13,10 @@ import { WriteSqlValidator } from "./modules/query/write-sql-validator.js";
 import { OperationExecutionService } from "./modules/approval/operation-execution.service.js";
 import { OperationExecutionWorkflowService } from "./modules/approval/operation-execution-workflow.service.js";
 import { z } from "zod";
+import config from "./config/index.js";
 
-process.loadEnvFile(".env");
-const queryConnectionString = process.env.QUERY_DATABASE_URL;
-const writeConnectionString = process.env.WRITE_DATABASE_URL;
+const queryConnectionString = config.queryDatabaseUrl;
+const writeConnectionString = config.writeDatabaseUrl;
 
 if (!queryConnectionString) {
     throw new Error("QUERY_DATABASE_URL is not configured");
@@ -242,6 +242,8 @@ server.registerTool(
 );
 
 async function main() {
+    await database.verifyConnections();
+
     const transport = new StdioServerTransport();
     try {
         await server.connect(transport);
@@ -250,7 +252,7 @@ async function main() {
             "PGMind MCP server is running. Waiting for requests...",
         );
     } catch (error) {
-        await database.close();
+        await database.shutdown();
         throw error;
     }
 }
@@ -266,14 +268,14 @@ async function shutdown() {
     try {
         await server.close();
     } catch (error) {
-        console.error("Error closing MCP server :", error);
+        console.error("Error closing MCP server:", error);
     }
 
     try {
-        await database.close();
-        console.error("Database connection pool closed.");
+        await database.shutdown();
+        console.error("Database connection pools closed.");
     } catch (error) {
-        console.error("Error closing database connection pool:", error);
+        console.error("Error closing database connection pools:", error);
     }
 
     process.exit(0);
@@ -284,6 +286,6 @@ process.on("SIGTERM", shutdown);
 
 main().catch(async (err) => {
     console.error("Error starting PGMind MCP server:", err);
-    await database.close();
+    await database.shutdown();
     process.exit(1);
 });

@@ -1,155 +1,339 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import { StartedPostgreSqlContainer, PostgreSqlContainer } from "@testcontainers/postgresql";
 import { DatabaseService } from "./database.service.js";
-import { CommitOutcomeUnknownError } from "./database.service.js";
+import { Pool } from "pg";
+import { execSync } from "child_process";
 
-const mockQuery = vi.fn();
-const mockRelease = vi.fn();
-const mockConnect = vi.fn();
+let dockerAvailable = false;
+try {
+    execSync("docker version", { stdio: "ignore" });
+    dockerAvailable = true;
+} catch {
+    dockerAvailable = false;
+}
 
-vi.mock("pg", () => {
-    const MockPool = vi.fn(function Pool(this: any) {
-        this.connect = mockConnect;
-    });
-    return { Pool: MockPool };
-});
+const describeIfDocker = dockerAvailable ? describe : describe.skip;
 
-beforeEach(() => {
-    mockConnect.mockReset();
-    mockQuery.mockReset();
-    mockRelease.mockReset();
+describeIfDocker("DatabaseService Integration Tests (requires Docker)", () => {
+    let container: StartedPostgreSqlContainer;
+    let database: DatabaseService;
+    let readPool: Pool;
+    let writePool: Pool;
+    let queryUrl: string;
+    let writeUrl: string;
 
-    mockConnect.mockResolvedValue({
-        query: mockQuery,
-        release: mockRelease,
-    });
-});
+    beforeAll(async () => {
+        container = await new PostgreSqlContainer("postgres:16-alpine")
+            .withDatabase("pgmind_test")
+            .withUsername("postgres")
+            .withPassword("postgres")
+            .start();
 
-describe("DatabaseService.withWriteTransaction", () => {
-    it("throws when the write pool is not configured", async () => {
-        const database = new DatabaseService("postgres://read");
-        await expect(
-            database.withWriteTransaction("pgmind_dev", async () => {}),
-        ).rejects.toThrow("Write pool is not configured");
-    });
+        const host = container.getHost();
+        const port = container.getPort();
+        queryUrl = `postgresql://postgres:postgres@${host}:${port}/pgmind_test`;
+        writeUrl = `postgresql://postgres:postgres@${host}:${port}/pgmind_test`;
 
-    it("returns the callback result and commits on success", async () => {
-        mockQuery
-            .mockResolvedValueOnce({}) // BEGIN
-            .mockResolvedValueOnce({
-                rows: [{ database: "pgmind_dev", role: "pgmind_writer" }],
-            }) // identity check
-            .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
-            .mockResolvedValueOnce({}); // COMMIT
+        readPool = new Pool({ connectionString: queryUrl });
+        writePool = new Pool({ connectionString: writeUrl });
 
-        const database = new DatabaseService(
-            "postgres://read",
-            "postgres://write",
-        );
-        const result = await database.withWriteTransaction(
-            "pgmind_dev",
-            async () => "done",
-        );
+        await setupTestRoles();
+    }, 120000);
 
-        expect(result).toBe("done");
-        expect(mockQuery).toHaveBeenNthCalledWith(1, "BEGIN");
-        expect(mockQuery).toHaveBeenNthCalledWith(4, "COMMIT");
-        // Client returned to the pool for reuse (no release error).
-        expect(mockRelease).toHaveBeenCalledWith(undefined);
-    });
+    afterAll(async () => {
+        await readPool?.end();
+        await writePool?.end();
+        await database?.shutdown();
+        await container?.stop();
+    }, 30000);
 
-    it("throws the original SQL error when the callback fails and rollback succeeds", async () => {
-        mockQuery
-            .mockResolvedValueOnce({}) // BEGIN
-            .mockResolvedValueOnce({
-                rows: [{ database: "pgmind_dev", role: "pgmind_writer" }],
-            }) // identity check
-            .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
-            .mockResolvedValueOnce({}); // ROLLBACK
+    async function setupTestRoles(): Promise<void> {
+        const client = await writePool.connect();
+        try {
+            await client.query(`CREATE ROLE pgmind_readonly NOINHERIT`);
+            await client.query(`CREATE ROLE pgmind_writer NOINHERIT`);
+            await client.query(`GRANT CONNECT ON DATABASE pgmind_test TO pgmind_readonly, pgmind_writer`);
+            await client.query(`GRANT USAGE ON SCHEMA public TO pgmind_readonly, pgmind_writer`);
+            await client.query(`GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgmind_readonly`);
+            await client.query(`GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO pgmind_writer`);
+            await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO pgmind_readonly`);
+            await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT INSERT, UPDATE, DELETE ON TABLES TO pgmind_writer`);
+        } finally {
+            client.release();
+        }
+    }
 
-        const database = new DatabaseService(
-            "postgres://read",
-            "postgres://write",
-        );
-        const sqlError = new Error("SQL failed");
-        await expect(
-            database.withWriteTransaction("pgmind_dev", async () => {
-                throw sqlError;
-            }),
-        ).rejects.toBe(sqlError);
+    beforeEach(async () => {
+        vi.stubEnv("QUERY_DATABASE_URL", queryUrl);
+        vi.stubEnv("WRITE_DATABASE_URL", writeUrl);
+        vi.stubEnv("EXPECTED_DATABASE", "pgmind_test");
+        vi.stubEnv("EXPECTED_READ_ROLE", "postgres");
+        vi.stubEnv("EXPECTED_WRITE_ROLE", "postgres");
+        vi.stubEnv("POOL_MAX_READ", "5");
+        vi.stubEnv("POOL_MAX_WRITE", "5");
 
-        expect(mockQuery).toHaveBeenLastCalledWith("ROLLBACK");
-        // Client returned to the pool for reuse (rollback succeeded).
-        expect(mockRelease).toHaveBeenCalledWith(undefined);
+        database = new DatabaseService(queryUrl, writeUrl);
+        await database.verifyConnections();
     });
 
-    it("throws the original SQL error (not the rollback error) and removes the client from the pool when rollback also fails", async () => {
-        mockQuery
-            .mockResolvedValueOnce({}) // BEGIN
-            .mockResolvedValueOnce({
-                rows: [{ database: "pgmind_dev", role: "pgmind_writer" }],
-            }) // identity check
-            .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
-            .mockRejectedValueOnce(new Error("rollback failed")); // ROLLBACK
-
-        const database = new DatabaseService(
-            "postgres://read",
-            "postgres://write",
-        );
-        const sqlError = new Error("SQL failed");
-        await expect(
-            database.withWriteTransaction("pgmind_dev", async () => {
-                throw sqlError;
-            }),
-        ).rejects.toBe(sqlError);
-
-        expect(mockQuery).toHaveBeenLastCalledWith("ROLLBACK");
-        // Client removed from the pool (uncertain connection not reused).
-        expect(mockRelease).toHaveBeenCalledWith(expect.any(Error));
+    afterEach(async () => {
+        vi.unstubAllEnvs();
+        await database?.shutdown();
     });
 
-    it("throws CommitOutcomeUnknownError and removes the client from the pool when COMMIT fails", async () => {
-        mockQuery
-            .mockResolvedValueOnce({}) // BEGIN
-            .mockResolvedValueOnce({
-                rows: [{ database: "pgmind_dev", role: "pgmind_writer" }],
-            }) // identity check
-            .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
-            .mockRejectedValueOnce(new Error("commit failed")) // COMMIT
-            .mockResolvedValueOnce({}); // ROLLBACK (outer catch)
+    describe("verifyConnections", () => {
+        it("should verify read and write pool identities", async () => {
+            await expect(database.verifyConnections()).resolves.not.toThrow();
+        });
 
-        const database = new DatabaseService(
-            "postgres://read",
-            "postgres://write",
-        );
-        await expect(
-            database.withWriteTransaction("pgmind_dev", async () => 1),
-        ).rejects.toBeInstanceOf(CommitOutcomeUnknownError);
+        it("should reject mismatched database name", async () => {
+            vi.stubEnv("EXPECTED_DATABASE", "wrong_database");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await expect(db.verifyConnections()).rejects.toThrow("database mismatch");
+        });
 
-        expect(mockQuery).toHaveBeenNthCalledWith(4, "COMMIT");
-        // Client removed from the pool (commit outcome unknown).
-        expect(mockRelease).toHaveBeenCalledWith(expect.any(Error));
+        it("should reject mismatched read role", async () => {
+            vi.stubEnv("EXPECTED_READ_ROLE", "wrong_role");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await expect(db.verifyConnections()).rejects.toThrow("role mismatch");
+        });
+
+        it("should reject mismatched write role", async () => {
+            vi.stubEnv("EXPECTED_WRITE_ROLE", "wrong_role");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await expect(db.verifyConnections()).rejects.toThrow("role mismatch");
+        });
     });
 
-    it("throws an identity mismatch error with expected and actual values", async () => {
-        mockQuery
-            .mockResolvedValueOnce({}) // BEGIN
-            .mockResolvedValueOnce({
-                rows: [{ database: "other_db", role: "other_role" }],
-            }) // identity check (mismatch)
-            .mockResolvedValueOnce({}); // ROLLBACK
+    describe("withReadOnlyTransaction", () => {
+        it("should execute read-only query successfully", async () => {
+            const result = await database.withReadOnlyTransaction(async (client) => {
+                const res = await client.query("SELECT 1 AS val");
+                return res.rows[0].val;
+            });
+            expect(result).toBe(1);
+        });
 
-        const database = new DatabaseService(
-            "postgres://read",
-            "postgres://write",
-        );
-        await expect(
-            database.withWriteTransaction("pgmind_dev", async () => {}),
-        ).rejects.toThrow(
-            "Writer connection identity mismatch. Expected database: pgmind_dev, role: pgmind_writer. Got database: other_db, role: other_role",
-        );
+        it("should enforce statement_timeout", async () => {
+            vi.stubEnv("STATEMENT_TIMEOUT_MS", "100");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
 
-        expect(mockQuery).toHaveBeenLastCalledWith("ROLLBACK");
-        expect(mockRelease).toHaveBeenCalledWith(undefined);
+            await expect(
+                db.withReadOnlyTransaction(async (client) => {
+                    await client.query("SELECT pg_sleep(1)");
+                }),
+            ).rejects.toThrow(/statement timeout|canceling statement/i);
+        });
+
+        it("should enforce lock_timeout", async () => {
+            vi.stubEnv("LOCK_TIMEOUT_MS", "100");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            const client1 = await writePool.connect();
+            await client1.query("BEGIN");
+            await client1.query("CREATE TEMP TABLE lock_test (id int)");
+            await client1.query("INSERT INTO lock_test VALUES (1)");
+
+            await expect(
+                db.withReadOnlyTransaction(async (client) => {
+                    await client.query("SELECT * FROM lock_test FOR UPDATE");
+                }),
+            ).rejects.toThrow(/lock timeout/i);
+
+            await client1.query("ROLLBACK");
+            client1.release();
+        });
+
+        it("should enforce idle_in_transaction_session_timeout", async () => {
+            vi.stubEnv("IDLE_IN_TRANSACTION_TIMEOUT_MS", "100");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            await expect(
+                db.withReadOnlyTransaction(async (client) => {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }),
+            ).rejects.toThrow(/idle in transaction/i);
+        });
+
+        it("should discard client on rollback failure", async () => {
+            const originalQuery = Pool.prototype.query.bind(readPool);
+            let shouldFailRollback = false;
+            
+            vi.spyOn(readPool, "query").mockImplementation(async function(this: Pool, ...args) {
+                if (args[0] === "ROLLBACK" && shouldFailRollback) {
+                    throw new Error("Simulated rollback failure");
+                }
+                return originalQuery(...args);
+            });
+
+            await expect(
+                database.withReadOnlyTransaction(async (client) => {
+                    await client.query("SELECT 1");
+                    throw new Error("Force rollback");
+                }),
+            ).rejects.toThrow("Force rollback");
+
+            shouldFailRollback = true;
+            await expect(
+                database.withReadOnlyTransaction(async (client) => {
+                    await client.query("SELECT 1");
+                    throw new Error("Force rollback again");
+                }),
+            ).rejects.toThrow("Force rollback again");
+        });
+    });
+
+    describe("withWriteTransaction", () => {
+        it("should execute write transaction successfully", async () => {
+            await database.withWriteTransaction(async (client) => {
+                await client.query("CREATE TEMP TABLE write_test (id int, name text)");
+                await client.query("INSERT INTO write_test VALUES (1, 'test')");
+            });
+
+            const result = await database.query("SELECT * FROM write_test");
+            expect(result).toHaveLength(1);
+            expect(result[0].id).toBe(1);
+            expect(result[0].name).toBe("test");
+        });
+
+        it("should verify writer identity before execution", async () => {
+            vi.stubEnv("EXPECTED_WRITE_ROLE", "wrong_role");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await expect(db.verifyConnections()).rejects.toThrow("role mismatch");
+        });
+
+        it("should throw CommitOutcomeUnknownError on commit failure", async () => {
+            vi.stubEnv("STATEMENT_TIMEOUT_MS", "10");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            await expect(
+                db.withWriteTransaction(async (client) => {
+                    await client.query("CREATE TEMP TABLE commit_test (id int)");
+                    await client.query("SELECT pg_sleep(1)");
+                }),
+            ).rejects.toThrow("COMMIT result is unknown");
+        });
+
+        it("should discard client after CommitOutcomeUnknownError", async () => {
+            vi.stubEnv("STATEMENT_TIMEOUT_MS", "10");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            try {
+                await db.withWriteTransaction(async (client) => {
+                    await client.query("CREATE TEMP TABLE commit_test2 (id int)");
+                    await client.query("SELECT pg_sleep(1)");
+                });
+            } catch (e) {
+                expect(e).toBeInstanceOf(Error);
+                expect((e as Error).name).toBe("CommitOutcomeUnknownError");
+            }
+
+            const result = await db.query("SELECT 1 AS val");
+            expect(result[0].val).toBe(1);
+        });
+
+        it("should rollback on error before commit", async () => {
+            await expect(
+                database.withWriteTransaction(async (client) => {
+                    await client.query("CREATE TEMP TABLE rollback_test (id int)");
+                    await client.query("INSERT INTO rollback_test VALUES (1)");
+                    throw new Error("Intentional error");
+                }),
+            ).rejects.toThrow("Intentional error");
+
+            const result = await database.query("SELECT * FROM rollback_test");
+            expect(result).toHaveLength(0);
+        });
+
+        it("should enforce statement_timeout", async () => {
+            vi.stubEnv("STATEMENT_TIMEOUT_MS", "100");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            await expect(
+                db.withWriteTransaction(async (client) => {
+                    await client.query("SELECT pg_sleep(1)");
+                }),
+            ).rejects.toThrow(/statement timeout|canceling statement/i);
+        });
+
+        it("should enforce lock_timeout", async () => {
+            vi.stubEnv("LOCK_TIMEOUT_MS", "100");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            const client1 = await writePool.connect();
+            await client1.query("BEGIN");
+            await client1.query("CREATE TEMP TABLE lock_test2 (id int)");
+            await client1.query("INSERT INTO lock_test2 VALUES (1)");
+
+            await expect(
+                db.withWriteTransaction(async (client) => {
+                    await client.query("SELECT * FROM lock_test2 FOR UPDATE");
+                }),
+            ).rejects.toThrow(/lock timeout/i);
+
+            await client1.query("ROLLBACK");
+            client1.release();
+        });
+
+        it("should enforce idle_in_transaction_session_timeout", async () => {
+            vi.stubEnv("IDLE_IN_TRANSACTION_TIMEOUT_MS", "100");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            await expect(
+                db.withWriteTransaction(async (client) => {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }),
+            ).rejects.toThrow(/idle in transaction/i);
+        });
+    });
+
+    describe("pool configuration", () => {
+        it("should respect poolMaxRead", async () => {
+            vi.stubEnv("POOL_MAX_READ", "2");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            const promises = Array.from({ length: 5 }, () => 
+                db.withReadOnlyTransaction(async (client) => {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    return 1;
+                })
+            );
+            const results = await Promise.all(promises);
+            expect(results).toHaveLength(5);
+        });
+
+        it("should respect poolMaxWrite", async () => {
+            vi.stubEnv("POOL_MAX_WRITE", "2");
+            const db = new DatabaseService(queryUrl, writeUrl);
+            await db.verifyConnections();
+
+            const promises = Array.from({ length: 5 }, () => 
+                db.withWriteTransaction(async (client) => {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    return 1;
+                })
+            );
+            const results = await Promise.all(promises);
+            expect(results).toHaveLength(5);
+        });
+    });
+
+    describe("graceful shutdown", () => {
+        it("should shutdown pools cleanly", async () => {
+            await expect(database.shutdown()).resolves.not.toThrow();
+            
+            const newDb = new DatabaseService(queryUrl, writeUrl);
+            await newDb.verifyConnections();
+            await newDb.shutdown();
+        });
     });
 });

@@ -1,25 +1,102 @@
 import config from "../../config/index.js";
-import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import { Pool, type PoolClient, type QueryResultRow, type PoolConfig } from "pg";
 
 export class DatabaseService {
     private readonly pool: Pool;
     private readonly writePool?: Pool;
+    private readonly expectedDatabase: string;
+    private readonly expectedReadRole: string;
+    private readonly expectedWriteRole: string;
+    private readonly expectedHost?: string;
+    private readonly expectedPort?: number;
 
     constructor(queryConnectionString: string, writeConnectionString?: string) {
-        this.pool = new Pool({
+        const poolConfig: PoolConfig = {
             connectionString: queryConnectionString,
-            max: 10,
-            connectionTimeoutMillis: 5000,
-            idleTimeoutMillis: 30000,
-        });
+            max: config.poolMaxRead,
+            connectionTimeoutMillis: config.poolConnectionTimeoutMs,
+            idleTimeoutMillis: config.poolIdleTimeoutMs,
+            application_name: config.applicationName,
+        };
+
+        this.pool = new Pool(poolConfig);
+        this.setupPoolErrorHandlers(this.pool, "read");
 
         if (writeConnectionString) {
-            this.writePool = new Pool({
+            const writePoolConfig: PoolConfig = {
                 connectionString: writeConnectionString,
-                max: 10,
-                connectionTimeoutMillis: 5000,
-                idleTimeoutMillis: 30000,
-            });
+                max: config.poolMaxWrite,
+                connectionTimeoutMillis: config.poolConnectionTimeoutMs,
+                idleTimeoutMillis: config.poolIdleTimeoutMs,
+                application_name: config.applicationName,
+            };
+            this.writePool = new Pool(writePoolConfig);
+            this.setupPoolErrorHandlers(this.writePool, "write");
+        }
+
+        this.expectedDatabase = config.expectedDatabase;
+        this.expectedReadRole = config.expectedReadRole;
+        this.expectedWriteRole = config.expectedWriteRole;
+        this.expectedHost = config.expectedHost;
+        this.expectedPort = config.expectedPort;
+    }
+
+    private setupPoolErrorHandlers(pool: Pool, poolName: string): void {
+        pool.on("error", (err) => {
+            console.error(`Unexpected ${poolName} pool error:`, err);
+        });
+    }
+
+    async verifyConnections(): Promise<void> {
+        await this.verifyPool(this.pool, "read", this.expectedReadRole);
+        if (this.writePool) {
+            await this.verifyPool(this.writePool, "write", this.expectedWriteRole);
+        }
+    }
+
+    private async verifyPool(pool: Pool, poolName: string, expectedRole: string): Promise<void> {
+        const client = await pool.connect();
+        try {
+            const identityResult = await client.query<{
+                database: string;
+                role: string;
+                host: string | null;
+                port: number | null;
+            }>(`
+                SELECT 
+                    current_database() AS database,
+                    current_user AS role,
+                    inet_server_addr() AS host,
+                    inet_server_port() AS port
+            `);
+
+            const identity = identityResult.rows[0];
+
+            if (identity?.database !== this.expectedDatabase) {
+                throw new Error(
+                    `${poolName} pool database mismatch. Expected: ${this.expectedDatabase}, Got: ${identity?.database}`,
+                );
+            }
+
+            if (identity?.role !== expectedRole) {
+                throw new Error(
+                    `${poolName} pool role mismatch. Expected: ${expectedRole}, Got: ${identity?.role}`,
+                );
+            }
+
+            if (this.expectedHost && identity?.host !== this.expectedHost) {
+                throw new Error(
+                    `${poolName} pool host mismatch. Expected: ${this.expectedHost}, Got: ${identity?.host}`,
+                );
+            }
+
+            if (this.expectedPort && identity?.port !== this.expectedPort) {
+                throw new Error(
+                    `${poolName} pool port mismatch. Expected: ${this.expectedPort}, Got: ${identity?.port}`,
+                );
+            }
+        } finally {
+            client.release();
         }
     }
 
@@ -29,6 +106,11 @@ export class DatabaseService {
     }
 
     async close(): Promise<void> {
+        await this.pool.end();
+        await this.writePool?.end();
+    }
+
+    async shutdown(): Promise<void> {
         await this.pool.end();
         await this.writePool?.end();
     }
@@ -49,8 +131,9 @@ export class DatabaseService {
         try {
             await client.query("BEGIN READ ONLY");
 
-            // Cancel queries that exceed 10 seconds.
-            await client.query("SET LOCAL statement_timeout = '10s'");
+            await client.query(`SET LOCAL statement_timeout = '${config.statementTimeoutMs}ms'`);
+            await client.query(`SET LOCAL lock_timeout = '${config.lockTimeoutMs}ms'`);
+            await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${config.idleInTransactionTimeoutMs}ms'`);
 
             const result = await callback(client);
 
@@ -60,8 +143,10 @@ export class DatabaseService {
         } catch (error) {
             try {
                 await client.query("ROLLBACK");
-            } catch (error) {
-                // preserve the original error if rollback fails
+            } catch (rollbackError) {
+                // Rollback failed — connection state uncertain, discard the client
+                client.release(rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
+                throw error;
             }
             throw error;
         } finally {
@@ -70,7 +155,6 @@ export class DatabaseService {
     }
 
     async withWriteTransaction<T>(
-        expectedDatabase: string,
         callback: (client: PoolClient) => Promise<T>,
     ): Promise<T> {
         if (!this.writePool) {
@@ -80,69 +164,93 @@ export class DatabaseService {
         const client = await this.writePool.connect();
 
         let commitAttempted = false;
-        let releaseError: Error | undefined;
+        let commitError: Error | undefined;
 
         try {
             await client.query("BEGIN");
 
-            // Verify the writer connection before executing anything.
             const identityResult = await client.query<{
                 database: string;
                 role: string;
-            }>(
-                `SELECT 
+                host: string | null;
+                port: number | null;
+            }>(`
+                SELECT 
                     current_database() AS database, 
-                    current_user AS role
-                `,
-            );
+                    current_user AS role,
+                    inet_server_addr() AS host,
+                    inet_server_port() AS port
+            `);
 
             const identity = identityResult.rows[0];
 
             if (
-                identity?.database !== expectedDatabase ||
-                identity?.role !== config.writeRoleName
+                identity?.database !== this.expectedDatabase ||
+                identity?.role !== this.expectedWriteRole
             ) {
                 throw new Error(
-                    `Writer connection identity mismatch. Expected database: ${expectedDatabase}, role: ${config.writeRoleName}. Got database: ${identity?.database}, role: ${identity?.role}`,
+                    `Writer connection identity mismatch. Expected database: ${this.expectedDatabase}, role: ${this.expectedWriteRole}. Got database: ${identity?.database}, role: ${identity?.role}`,
                 );
             }
 
-            // Cancel queries that exceed 10 seconds.
-            await client.query("SET LOCAL statement_timeout = '10s'");
+            if (this.expectedHost && identity?.host !== this.expectedHost) {
+                throw new Error(
+                    `Writer connection host mismatch. Expected: ${this.expectedHost}, Got: ${identity?.host}`,
+                );
+            }
+
+            if (this.expectedPort && identity?.port !== this.expectedPort) {
+                throw new Error(
+                    `Writer connection port mismatch. Expected: ${this.expectedPort}, Got: ${identity?.port}`,
+                );
+            }
+
+            await client.query(`SET LOCAL statement_timeout = '${config.statementTimeoutMs}ms'`);
+            await client.query(`SET LOCAL lock_timeout = '${config.lockTimeoutMs}ms'`);
+            await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${config.idleInTransactionTimeoutMs}ms'`);
 
             const result = await callback(client);
 
-            // From this point onward, a failed COMMIT has an uncertain outcome.
             commitAttempted = true;
 
             try {
                 await client.query("COMMIT");
             } catch (error) {
-                releaseError =
-                    error instanceof Error ? error : new Error(String(error));
-                throw new CommitOutcomeUnknownError(releaseError);
+                commitError = error instanceof Error ? error : new Error(String(error));
+                throw new CommitOutcomeUnknownError(commitError);
             }
+
             return result;
         } catch (error) {
+            if (commitAttempted) {
+                // COMMIT was attempted but failed — outcome unknown, discard connection
+                throw error;
+            }
+
+            // Failure before commit — safe to rollback
             try {
                 await client.query("ROLLBACK");
             } catch (rollbackError) {
-                // Mark the client for removal from the pool so an uncertain
-                // connection is not reused after a failed rollback.
-                releaseError =
-                    rollbackError instanceof Error
-                        ? rollbackError
-                        : new Error(String(rollbackError));
-                // preserve the original error if rollback fails
+                // Rollback also failed — discard connection, preserve original error
+                const rollbackErr = rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError));
+                if (error instanceof Error) {
+                    error.message += ` | Rollback also failed: ${rollbackErr.message}`;
+                }
+                client.release(rollbackErr);
+                throw error;
             }
+
             throw error;
         } finally {
-            client.release(releaseError);
+            if (commitAttempted && commitError) {
+                // COMMIT failed — discard the client
+                client.release(commitError);
+            } else {
+                client.release();
+            }
         }
     }
 }
-// Using Pool instead of Client
-// Because Pool manages multiple clients and handles connection pooling, it is more efficient for applications that require multiple database connections. The Pool class allows you to reuse connections, reducing the overhead of establishing new connections for each query.
 
 export class CommitOutcomeUnknownError extends Error {
     constructor(cause: unknown) {

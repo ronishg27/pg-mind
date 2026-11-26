@@ -2,8 +2,8 @@ import config from "../config/index.js";
 import { DatabaseService } from "../modules/database/database.service.js";
 
 process.loadEnvFile(".env");
-const queryConnectionString = process.env.QUERY_DATABASE_URL;
-const writeConnectionString = process.env.WRITE_DATABASE_URL;
+const queryConnectionString = config.queryDatabaseUrl;
+const writeConnectionString = config.writeDatabaseUrl;
 
 if (!queryConnectionString || !writeConnectionString) {
     throw new Error("Database connection strings are missing.");
@@ -16,6 +16,8 @@ const database = new DatabaseService(
 
 async function main() {
     try {
+        await database.verifyConnections();
+
         // Verify read-only connection.
         const readResult = await database.query<{
             current_user: string;
@@ -25,7 +27,6 @@ async function main() {
 
         // Verify write connection inside a transaction.
         await database.withWriteTransaction(
-            config.databaseName,
             async (client) => {
                 const result = await client.query(
                     "INSERT INTO products (name, price, stock) VALUES ($1, $2, $3) RETURNING id",
@@ -47,7 +48,7 @@ async function main() {
             throw error;
         }
     } finally {
-        await database.close();
+        await database.shutdown();
     }
 }
 
