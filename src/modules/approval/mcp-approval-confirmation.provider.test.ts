@@ -197,7 +197,7 @@ describe("McpApprovalConfirmationProvider", () => {
             "Choose whether to authorize this database operation.",
         );
         expect(decision.oneOf).toEqual([
-            { const: "approve", title: "✅ Approve and execute" },
+            { const: "approve", title: "✅ Approve operation" },
             { const: "reject", title: "❌ Reject operation" },
         ]);
         expect(decision.default).toBe("reject");

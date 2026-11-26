@@ -100,7 +100,7 @@ function buildMessage(input: ApprovalConfirmationInput): string {
         "",
         "────────────────────────────────────────────────────────",
         "Your options",
-        `  ✅ Approve → the SQL above is executed`,
+        `  ✅ Approve → operation is authorized for execution`,
         `  ❌ Reject → cancelled, no changes made`,
         "────────────────────────────────────────────────────────",
         "",
@@ -130,7 +130,7 @@ export class McpApprovalConfirmationProvider implements ApprovalConfirmationProv
                         oneOf: [
                             {
                                 const: "approve",
-                                title: "✅ Approve and execute",
+                                title: "✅ Approve operation",
                             },
                             { const: "reject", title: "❌ Reject operation" },
                         ],

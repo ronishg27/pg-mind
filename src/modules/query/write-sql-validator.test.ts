@@ -238,6 +238,55 @@ describe("WriteSqlValidator", () => {
                 `).valid,
             ).toBe(false);
         });
+
+        it("should reject session-level advisory lock functions in write SQL", () => {
+            expect(
+                validator.validate(
+                    "UPDATE products SET name = pg_advisory_lock(1) WHERE id = 1",
+                ).valid,
+            ).toBe(false);
+        });
+
+        it("should reject pg_try_advisory_lock in write SQL", () => {
+            expect(
+                validator.validate(
+                    "UPDATE products SET name = pg_try_advisory_lock(1, 2) WHERE id = 1",
+                ).valid,
+            ).toBe(false);
+        });
+
+        it("should reject pg_advisory_unlock in write SQL", () => {
+            expect(
+                validator.validate(
+                    "UPDATE products SET name = pg_advisory_unlock(1) WHERE id = 1",
+                ).valid,
+            ).toBe(false);
+        });
+
+        it("should reject pg_advisory_unlock_all in write SQL", () => {
+            expect(
+                validator.validate(
+                    "UPDATE products SET name = pg_advisory_unlock_all() WHERE id = 1",
+                ).valid,
+            ).toBe(false);
+        });
+
+        // Transaction-level advisory locks are SAFE (auto-release at transaction end)
+        it("should allow pg_advisory_xact_lock in write SQL", () => {
+            expect(
+                validator.validate(
+                    "UPDATE products SET name = pg_advisory_xact_lock(1) WHERE id = 1",
+                ).valid,
+            ).toBe(true);
+        });
+
+        it("should allow pg_try_advisory_xact_lock in write SQL", () => {
+            expect(
+                validator.validate(
+                    "UPDATE products SET name = pg_try_advisory_xact_lock(1, 2) WHERE id = 1",
+                ).valid,
+            ).toBe(true);
+        });
     });
 
     describe("Transaction-incompatible variants", () => {

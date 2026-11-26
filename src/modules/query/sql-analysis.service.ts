@@ -35,6 +35,11 @@ const DISALLOWED_FUNCTIONS = new Set([
     "set_config",
     "lo_import",
     "lo_export",
+    // Session-level advisory locks (persist beyond transaction, dangerous in pooled connections)
+    "pg_advisory_lock",
+    "pg_try_advisory_lock",
+    "pg_advisory_unlock",
+    "pg_advisory_unlock_all",
 ]);
 
 const DISALLOWED_STATEMENT_TYPES = new Set([
