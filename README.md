@@ -21,9 +21,10 @@ PGMind does **not** contain its own LLM. The MCP client provides the AI agent, w
 | SQL validation (read-only, pg-aware AST parser) | Available |
 | Write operations behind human approval | Available |
 | Approval-gated write execution (INSERT, UPDATE, DELETE, and allowlisted DDL) | Available |
-| Query explanation & EXPLAIN support | Not yet |
-| Authentication / authorization | Not yet |
-| Multi-tenancy | Not yet |
+| Query explanation & EXPLAIN support | Available |
+| Query plan analysis & diagnostics | Available |
+| Error diagnosis & SQLSTATE mapping | Available |
+| Index usage diagnostics & suggestions | Available |
 
 ## Architecture
 
@@ -35,7 +36,10 @@ MCP Client (OpenCode / other)
         ▼
 PGMind TypeScript Application (src/index.ts)
 ├── MCP tools: ping, execute_query, get_database_schema,
-│   prepare_operation, execute_approved_operation
+│   get_schema, get_table, list_schemas,
+│   prepare_operation, execute_approved_operation,
+│   explain_query, analyze_query_plan, diagnose_error,
+│   get_index_diagnostics
 ├── Services: database, schema, query, approval
 └── Infrastructure: pg driver, pgsql-ast-parser, config
         │
@@ -124,8 +128,15 @@ The server runs on stdio. Configure your MCP client (e.g., OpenCode) to point at
 | `ping` | Verify MCP server connectivity | No |
 | `execute_query` | Execute validated read-only SQL | No |
 | `get_database_schema` | Retrieve database schema information | No |
-| `prepare_operation` | Prepare a write operation and request human approval | No (stores approval only) |
-| `execute_approved_operation` | Execute a previously approved write operation | Yes |
+| `get_schema` | Get schema metadata for a specific schema | No |
+| `get_table` | Get detailed table metadata | No |
+| `list_schemas` | List all accessible schema names | No |
+| `explain_query` | Get PostgreSQL EXPLAIN plan for a query | No |
+| `analyze_query_plan` | Analyze query plan for performance issues | No |
+| `diagnose_error` | Diagnose PostgreSQL error messages | No |
+| `get_index_diagnostics` | Get index usage stats and suggestions | No |
+| `prepare_operation` | Prepare a write operation for approval | No (stores approval only) |
+| `execute_approved_operation` | Execute an approved write operation | Yes |
 
 See `docs/architecture.md` and the tool handler implementations in `src/index.ts` for input schemas, validation behavior, and security restrictions.
 
@@ -163,7 +174,5 @@ There is **no `pnpm lint`** script and no ESLint/Prettier config.
 | `docs/opencode-integration.md` | OpenCode MCP client integration |
 | `postgresql-readonly-user-guide.md` | Detailed read-only role setup guide |
 | `opencode-setup.md` | OpenCode MCP server config snippet |
-| `PRD.md` | Original product requirements (historical) |
 | `TECH_STACK.md` | Technical decisions and stack overview |
-| `TASKS.md` | Development roadmap and task status |
 | `AGENTS.md` | Instructions for AI coding agents |

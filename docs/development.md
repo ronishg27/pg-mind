@@ -49,9 +49,9 @@ Tests are colocated with source at `src/**/*.test.ts` (Vitest). There is no sepa
 
 A fresh run of `pnpm test` produces:
 
-- **8 test files passed**
-- **98 tests passed**
-- Duration: ~1 second
+- **9 test files passed**
+- **205 tests passed**
+- Duration: ~2–5 seconds
 
 Test coverage by module:
 
@@ -65,7 +65,8 @@ Test coverage by module:
 | `operation-execution-workflow.service.test.ts` | `OperationExecutionWorkflowService` | 2 |
 | `sql-operation-classifier.test.ts` | `SqlOperationClassifier` | 25 |
 | `write-sql-validator.test.ts` | `WriteSqlValidator` | 13 |
-| **Total** | **8 test files** | **98** |
+| `write-coverage.test.ts` | `WriteSqlValidator` (additional coverage) | 107 |
+| **Total** | **9 test files** | **205** |
 
 ### What the tests cover
 

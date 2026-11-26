@@ -93,13 +93,20 @@ Expected response: `"PGMind is running. Pong!"`.
 
 ## 6. Inspect Available Tools
 
-PGMind registers five MCP tools:
+PGMind registers twelve MCP tools:
 
 | Tool | Input | Purpose |
 |------|-------|---------|
 | `ping` | `{ message?: string }` | Verify connectivity |
 | `execute_query` | `{ sql: string }` | Execute validated read-only SQL |
-| `get_database_schema` | `{}` | Retrieve schema information |
+| `get_database_schema` | `{ schemaNames?, tableNames?, includeViews?, includeMaterializedViews?, includeSequences?, includeFunctions?, includeIndexes?, includeConstraints? }` | Retrieve schema information |
+| `get_schema` | `{ schemaName: string }` | Get schema metadata for a specific schema |
+| `get_table` | `{ schemaName: string, tableName: string }` | Get detailed table metadata |
+| `list_schemas` | `{}` | List all accessible schema names |
+| `explain_query` | `{ sql, analyze?, format?, verbose?, costs?, buffers?, timing? }` | Get PostgreSQL EXPLAIN plan for a query |
+| `analyze_query_plan` | `{ sql: string }` | Analyze query plan for performance issues |
+| `diagnose_error` | `{ errorMessage: string }` | Diagnose PostgreSQL error messages |
+| `get_index_diagnostics` | `{ schemaName: string, tableName: string }` | Get index usage stats and suggestions |
 | `prepare_operation` | `{ sql: string }` | Prepare a write operation for approval |
 | `execute_approved_operation` | `{ approvalId: string }` | Execute an approved write operation |
 

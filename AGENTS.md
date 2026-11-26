@@ -69,7 +69,7 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 
 ## Architecture (what actually exists)
 
-- Entry point: `src/index.ts` — builds the MCP stdio server and registers tools (`ping`, `execute_query`, `get_database_schema`, `prepare_operation`, `execute_approved_operation`).
+- Entry point: `src/index.ts` — builds the MCP stdio server and registers tools (`ping`, `execute_query`, `get_database_schema`, `get_schema`, `get_table`, `list_schemas`, `prepare_operation`, `execute_approved_operation`, `explain_query`, `analyze_query_plan`, `diagnose_error`, `get_index_diagnostics`).
 - Config: `src/config/index.ts` (`QUERY_DATABASE_URL`, `WRITE_DATABASE_URL`, `writeRoleName` default `pgmind_writer`).
 - Modules under `src/modules/`: `database`, `schema`, `query`, `approval`.
 - Directories `src/mcp/`, `src/ai/`, `src/infrastructure/`, `src/analysis/` **do not exist**. MCP tools are registered in `src/index.ts`.
@@ -87,12 +87,12 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 ## Documentation references
 
 - `README.md` — product scope and setup
-- `PRD.md` — product requirements (historical)
 - `TECH_STACK.md` — technology choices
-- `TASKS.md` — roadmap and task status
 - `docs/architecture.md` — internal architecture and execution flows
 - `docs/security.md` — security model, defense-in-depth, and limitations
 - `docs/approval-workflow.md` — approval lifecycle, statuses, and execution
 - `docs/database-setup.md` — PostgreSQL setup and role permissions
+- `docs/development.md` — development scripts, testing, and test coverage
+- `docs/opencode-integration.md` — OpenCode MCP client integration
 
 None of these exist as separate `context.md` (gitignored). Product/roadmap docs live in the files above.

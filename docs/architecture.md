@@ -174,13 +174,20 @@ Separate validators exist because the read-only and write paths have different s
 
 ## MCP Tools
 
-Five tools are registered in `src/index.ts`:
+Twelve tools are registered in `src/index.ts`:
 
 | Tool | Input | Output | Modifies DB? |
 |------|-------|--------|--------------|
 | `ping` | `{ message?: string }` | Text: `"PGMind is running. Pong!"` or echo | No |
 | `execute_query` | `{ sql: string }` (1–50,000 chars) | JSON `QueryResult` (columns, rows, rowCount, truncated) | No |
-| `get_database_schema` | `{}` | JSON schema (schemas, tables, columns, constraints) | No |
+| `get_database_schema` | `{ schemaNames?, tableNames?, includeViews?, includeMaterializedViews?, includeSequences?, includeFunctions?, includeIndexes?, includeConstraints? }` | JSON schema (schemas, tables, columns, constraints) | No |
+| `get_schema` | `{ schemaName: string }` | JSON `SchemaMetadata` | No |
+| `get_table` | `{ schemaName: string, tableName: string }` | JSON `TableMetadata` | No |
+| `list_schemas` | `{}` | JSON `{ schemas: string[] }` | No |
+| `explain_query` | `{ sql, analyze?, format?, verbose?, costs?, buffers?, timing? }` | JSON `ExplainResult` (plan, planningTime, executionTime) | No |
+| `analyze_query_plan` | `{ sql: string }` (1–50,000 chars) | JSON `QueryPlanAnalysis` (summary, issues, recommendations) | No |
+| `diagnose_error` | `{ errorMessage: string }` | JSON `ErrorDiagnosis` (error, explanation, affectedObjects, suggestedActions) | No |
+| `get_index_diagnostics` | `{ schemaName: string, tableName: string }` | JSON `IndexDiagnosticsResult` (indexes, suggestions) | No |
 | `prepare_operation` | `{ sql: string }` (1–50,000 chars) | JSON `{ id, status, message }` | No (stores approval only) |
 | `execute_approved_operation` | `{ approvalId: uuid }` | JSON `{ approvalId, operation, database, affectedRows, status, message }` | Yes |
 
