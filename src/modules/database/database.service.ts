@@ -173,6 +173,13 @@ export class DatabaseService {
         callback: (client: PoolClient) => Promise<T>,
     ): Promise<T> {
         const client = await this.pool.connect();
+        let released = false;
+
+        const release = (error?: Error) => {
+            if (released) return;
+            released = true;
+            client.release(error);
+        };
 
         try {
             await client.query("BEGIN READ ONLY");
@@ -190,12 +197,12 @@ export class DatabaseService {
             try {
                 await client.query("ROLLBACK");
             } catch (rollbackError) {
-                client.release(rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
+                release(rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
                 throw error;
             }
             throw error;
         } finally {
-            client.release();
+            release();
         }
     }
 
@@ -207,6 +214,13 @@ export class DatabaseService {
         }
 
         const client = await this.writePool.connect();
+        let released = false;
+
+        const release = (error?: Error) => {
+            if (released) return;
+            released = true;
+            client.release(error);
+        };
 
         let commitAttempted = false;
         let commitError: Error | undefined;
@@ -276,18 +290,22 @@ export class DatabaseService {
             } catch (rollbackError) {
                 const rollbackErr = rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError));
                 if (error instanceof Error) {
-                    error.message += ` | Rollback also failed: ${rollbackErr.message}`;
+                    // Preserve both errors without mutating the original
+                    const combined = new Error(`${error.message} | Rollback also failed: ${rollbackErr.message}`);
+                    combined.cause = error;
+                    release(combined);
+                } else {
+                    release(rollbackErr);
                 }
-                client.release(rollbackErr);
                 throw error;
             }
 
             throw error;
         } finally {
             if (commitAttempted && commitError) {
-                client.release(commitError);
+                release(commitError);
             } else {
-                client.release();
+                release();
             }
         }
     }

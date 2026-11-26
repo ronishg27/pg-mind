@@ -62,12 +62,11 @@ export function createErrorResult(
     return { success: false, error };
 }
 
-export function mapPostgresError(err: Error): ToolError {
+export function mapPostgresError(err: Error & { code?: string; detail?: string; hint?: string; schema?: string; table?: string; column?: string; constraint?: string }): ToolError {
     const message = err.message;
     
-    // SQLSTATE error codes
-    const sqlStateMatch = message.match(/SQLSTATE\s+(\w+)/i);
-    const sqlState = sqlStateMatch?.[1];
+    // SQLSTATE error codes - node-postgres exposes this as err.code
+    const sqlState = err.code;
 
     const errorMap: Record<string, ToolErrorCode> = {
         "23505": "VALIDATION_FAILED", // unique_violation
@@ -90,7 +89,12 @@ export function mapPostgresError(err: Error): ToolError {
     };
 
     if (sqlState && errorMap[sqlState]) {
-        return createToolError(errorMap[sqlState], message, sqlState === "57014" || sqlState === "40001" || sqlState === "40P01");
+        return createToolError(
+            errorMap[sqlState], 
+            message, 
+            sqlState === "57014" || sqlState === "40001" || sqlState === "40P01",
+            { detail: err.detail, hint: err.hint, schema: err.schema, table: err.table, column: err.column, constraint: err.constraint }
+        );
     }
 
     // Check for common error patterns

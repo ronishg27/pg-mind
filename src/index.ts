@@ -124,9 +124,7 @@ registerTool(server, createReadOnlyNonIdempotentTool(
         const normalizedSql = sql.trim().replace(/;\s*$/, "");
 
         return executeWithCancellation(undefined, async () => {
-            const result = await database.withReadOnlyTransaction(async (client) => {
-                return queryService.executeQuery(normalizedSql);
-            });
+            const result = await queryService.executeQuery(normalizedSql);
             return createSuccessResult(result, {
                 truncated: result.truncated,
                 truncatedReason: result.truncatedReason,
@@ -222,13 +220,6 @@ registerTool(server, createReadOnlyNonIdempotentTool(
         const validation = validator.validate(sql);
         if (!validation.valid) {
             return createErrorResult(handleValidationError(new Error(validation.reason)));
-        }
-
-        if (analyze) {
-            const analysis = await diagnosticsService.analyzeQueryPlan(sql);
-            if (analysis.issues.some(i => i.type === "seq_scan" && i.severity === "high")) {
-                console.warn("EXPLAIN ANALYZE will execute the query. Ensure it's safe to run.");
-            }
         }
 
         return executeWithCancellation(undefined, async () => {

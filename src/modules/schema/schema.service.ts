@@ -114,11 +114,10 @@ interface FunctionRow {
     is_strict: boolean;
     is_security_definer: boolean;
     definition: string | null;
-    argument_name: string | null;
+    argument_name: string;
     argument_data_type: string;
     argument_mode: "IN" | "OUT" | "INOUT" | "VARIADIC";
-    argument_default: string | null;
-    ordinal_position: number;
+    arguments_full: string | null;
 }
 
 export class SchemaService {
@@ -153,6 +152,10 @@ export class SchemaService {
             ? `AND c.relname IN (${tableNames.map((_, i) => `$${(schemaNames?.length || 0) + i + 1}`).join(",")})`
             : "";
 
+        const indexTableFilter = tableNames?.length
+            ? `AND tc.relname IN (${tableNames.map((_, i) => `$${(schemaNames?.length || 0) + i + 1}`).join(",")})`
+            : "";
+
         // Build parameter arrays
         const params: (string | number)[] = [];
         if (schemaNames) params.push(...schemaNames);
@@ -177,7 +180,7 @@ export class SchemaService {
                 a.attidentity <> '' AS is_identity,
                 a.attidentity AS identity_generation,
                 CASE WHEN a.attgenerated = '' THEN NULL ELSE a.attgenerated END AS is_generated,
-                pg_catalog.pg_get_expr(a.attgenerated::text, a.attrelid) AS generation_expression,
+                pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) AS generation_expression,
                 pg_catalog.col_description(a.attrelid, a.attnum) AS col_description
             FROM pg_catalog.pg_class c
             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -207,7 +210,7 @@ export class SchemaService {
                     WHEN 'x' THEN 'EXCLUSION'
                 END AS constraint_type,
                 a.attname AS column_name,
-                array_position(con.conkey, a.attnum) AS ordinal_position,
+                k.ordinality AS ordinal_position,
                 ref_ns.nspname AS referenced_table_schema,
                 ref_c.relname AS referenced_table_name,
                 ref_a.attname AS referenced_column_name,
@@ -218,16 +221,22 @@ export class SchemaService {
             FROM pg_catalog.pg_constraint con
             JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-            JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(con.conkey)
+            JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS k(attnum, ordinality) ON true
+            JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
             LEFT JOIN pg_catalog.pg_class ref_c ON ref_c.oid = con.confrelid
             LEFT JOIN pg_catalog.pg_namespace ref_ns ON ref_ns.oid = ref_c.relnamespace
-            LEFT JOIN pg_catalog.pg_attribute ref_a ON ref_a.attrelid = ref_c.oid AND ref_a.attnum = ANY(con.confkey)
+            LEFT JOIN LATERAL (
+                SELECT ref_a.attname
+                FROM pg_catalog.pg_attribute ref_a
+                WHERE ref_a.attrelid = ref_c.oid
+                  AND ref_a.attnum = con.confkey[k.ordinality]
+            ) ref_a ON con.contype = 'f'
             WHERE n.nspname NOT IN ('information_schema', 'pg_catalog')
                 AND n.nspname NOT LIKE 'pg_toast%'
                 AND con.contype IN ('p', 'f', 'u', 'c', 'x')
                 ${schemaFilter}
                 ${tableFilter}
-            ORDER BY n.nspname, c.relname, con.conname, array_position(con.conkey, a.attnum)
+            ORDER BY n.nspname, c.relname, con.conname, k.ordinality
         ` : "";
 
         // Batch query 3: All indexes
@@ -262,7 +271,7 @@ export class SchemaService {
             WHERE tn.nspname NOT IN ('information_schema', 'pg_catalog')
                 AND tn.nspname NOT LIKE 'pg_toast%'
                 ${schemaFilter}
-                ${tableFilter}
+                ${indexTableFilter}
             ORDER BY tn.nspname, tc.relname, i.relname, ordinal_position
         ` : "";
 
@@ -316,7 +325,7 @@ export class SchemaService {
             SELECT
                 n.nspname AS sequence_schema,
                 c.relname AS sequence_name,
-                pg_catalog.format_type(seq.seqtypid, seq.seqtypmod) AS data_type,
+                pg_catalog.format_type(seq.seqtypid, NULL) AS data_type,
                 seq.seqstart::text AS start_value,
                 seq.seqmin::text AS minimum_value,
                 seq.seqmax::text AS maximum_value,
@@ -344,21 +353,18 @@ export class SchemaService {
                 p.proisstrict AS is_strict,
                 p.prosecdef AS is_security_definer,
                 pg_catalog.pg_get_functiondef(p.oid) AS definition,
-                a.attname AS argument_name,
-                pg_catalog.format_type(a.atttypid, a.atttypmod) AS argument_data_type,
-                p.proargmodes[generate_subscripts(p.proargtypes, 1)] AS argument_mode,
-                pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) AS argument_default,
-                generate_subscripts(p.proargtypes, 1) AS ordinal_position
+                unnest(p.proargnames) AS argument_name,
+                unnest(p.proargtypes)::regtype AS argument_data_type,
+                unnest(p.proargmodes) AS argument_mode,
+                pg_catalog.pg_get_function_arguments(p.oid) AS arguments_full
             FROM pg_catalog.pg_proc p
             JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
             JOIN pg_catalog.pg_language l ON l.oid = p.prolang
-            LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid = p.oid
-            LEFT JOIN pg_catalog.pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
             WHERE n.nspname NOT IN ('information_schema', 'pg_catalog')
                 AND n.nspname NOT LIKE 'pg_toast%'
                 AND p.prokind = 'f'
                 ${schemaFilter}
-            ORDER BY n.nspname, p.proname, ordinal_position
+            ORDER BY n.nspname, p.proname
         ` : "";
 
         // Execute all queries in parallel
@@ -600,15 +606,13 @@ export class SchemaService {
                     functionMap.set(key, func);
                 }
 
-                if (row.argument_name || row.argument_data_type) {
-                    func.arguments.push({
-                        name: row.argument_name,
-                        dataType: row.argument_data_type,
-                        mode: row.argument_mode || "IN",
-                        defaultExpression: row.argument_default,
-                        ordinalPosition: row.ordinal_position,
-                    });
-                }
+                func.arguments.push({
+                    name: row.argument_name,
+                    dataType: row.argument_data_type,
+                    mode: row.argument_mode || "IN",
+                    defaultExpression: null, // pg_get_function_arguments would need separate parsing
+                    ordinalPosition: func.arguments.length + 1,
+                });
 
                 const schema = schemaMap.get(row.schema_name);
                 if (schema && !schema.functions.some((f) => f.name === row.function_name)) {
@@ -633,10 +637,7 @@ export class SchemaService {
                 table.indexes.sort((a, b) => a.name.localeCompare(b.name));
 
                 for (const constraint of table.constraints) {
-                    constraint.columns.sort();
-                    if (constraint.referencedColumns) {
-                        constraint.referencedColumns.sort();
-                    }
+                    // Do NOT sort - preserve ordinal order from query (critical for composite FKs)
                 }
 
                 for (const index of table.indexes) {

@@ -36,8 +36,8 @@ export class DiagnosticsService {
             analyze = false,
             verbose = true,
             costs = true,
-            buffers = true,
-            timing = true,
+            buffers = false,
+            timing = false,
             summary = true,
             format = "json",
         } = options;
@@ -46,8 +46,9 @@ export class DiagnosticsService {
         if (analyze) explainOptions.push("ANALYZE");
         if (verbose) explainOptions.push("VERBOSE");
         if (costs) explainOptions.push("COSTS");
-        if (buffers) explainOptions.push("BUFFERS");
-        if (timing) explainOptions.push("TIMING");
+        // BUFFERS and TIMING require ANALYZE
+        if (analyze && buffers) explainOptions.push("BUFFERS");
+        if (analyze && timing) explainOptions.push("TIMING");
         if (summary) explainOptions.push("SUMMARY");
         explainOptions.push(`FORMAT ${format.toUpperCase()}`);
 
@@ -58,11 +59,12 @@ export class DiagnosticsService {
             const row = result.rows[0];
 
             if (format === "json") {
-                const planData = row["QUERY PLAN"] as ExplainPlanNode[];
+                const planData = row["QUERY PLAN"] as Array<{ Plan: ExplainPlanNode; "Planning Time"?: number; "Execution Time"?: number }>;
+                const explain = planData[0];
                 return {
-                    plan: planData[0],
-                    planningTime: planData[0]["Planning Time"] as number | undefined,
-                    executionTime: planData[0]["Execution Time"] as number | undefined,
+                    plan: explain.Plan,
+                    planningTime: explain["Planning Time"],
+                    executionTime: explain["Execution Time"],
                 };
             }
 
@@ -192,9 +194,9 @@ export class DiagnosticsService {
         return Array.from(recommendations);
     }
 
-    async diagnoseError(error: Error): Promise<ErrorDiagnosis> {
+    async diagnoseError(error: Error & { code?: string; detail?: string; hint?: string; schema?: string; table?: string; column?: string; constraint?: string }): Promise<ErrorDiagnosis> {
         const errorInfo = this.parseError(error);
-        const affectedObjects = await this.findAffectedObjects(errorInfo);
+        const affectedObjects = await this.findAffectedObjects(errorInfo, error);
         const explanation = this.generateErrorExplanation(errorInfo);
         const suggestedActions = this.generateSuggestedActions(errorInfo, affectedObjects);
 
@@ -206,7 +208,17 @@ export class DiagnosticsService {
         };
     }
 
-    private parseError(error: Error): ErrorInfo {
+    private parseError(error: Error & { code?: string; detail?: string; hint?: string; schema?: string; table?: string; column?: string; constraint?: string }): ErrorInfo {
+        // node-postgres exposes SQLSTATE as err.code
+        if (error.code) {
+            return {
+                code: error.code,
+                message: error.message,
+                severity: "ERROR",
+            };
+        }
+
+        // Fallback: try to parse from message
         const message = error.message;
         const pgErrorMatch = message.match(/^(?<severity>\w+):\s*(?<message>.+?)(?:\s+\(SQLSTATE\s+(?<code>\w+)\))?$/);
         
@@ -226,11 +238,18 @@ export class DiagnosticsService {
         };
     }
 
-    private async findAffectedObjects(errorInfo: ErrorInfo): Promise<AffectedObject[]> {
+    private async findAffectedObjects(errorInfo: ErrorInfo, originalError?: Error & { schema?: string; table?: string; column?: string; constraint?: string }): Promise<AffectedObject[]> {
         const objects: AffectedObject[] = [];
 
-        // This would query pg_catalog to find objects related to the error
-        // For now, return empty - could be enhanced with actual catalog lookups
+        // Use node-postgres error properties if available
+        if (originalError) {
+            const schema = originalError.schema || "public";
+            if (originalError.schema) objects.push({ type: "schema", schema, name: originalError.schema });
+            if (originalError.table) objects.push({ type: "table", schema, name: originalError.table });
+            if (originalError.column) objects.push({ type: "column", schema, name: originalError.column });
+            if (originalError.constraint) objects.push({ type: "constraint", schema, name: originalError.constraint });
+        }
+
         return objects;
     }
 

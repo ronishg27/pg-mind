@@ -11,6 +11,8 @@ const ConfigSchema = z.object({
     expectedDatabase: z.string().min(1, "EXPECTED_DATABASE is required"),
     expectedReadRole: z.string().default("pgmind_readonly"),
     expectedWriteRole: z.string().default("pgmind_writer"),
+    // Deprecated alias
+    writeRoleName: z.string().optional(),
     expectedHost: z.string().optional(),
     expectedPort: z.coerce.number().int().positive().optional(),
     
@@ -36,7 +38,7 @@ const parsed = ConfigSchema.safeParse({
     writeDatabaseUrl: process.env.WRITE_DATABASE_URL,
     expectedDatabase: process.env.EXPECTED_DATABASE,
     expectedReadRole: process.env.EXPECTED_READ_ROLE,
-    expectedWriteRole: process.env.WRITE_ROLE_NAME,
+    expectedWriteRole: process.env.EXPECTED_WRITE_ROLE || process.env.WRITE_ROLE_NAME,
     expectedHost: process.env.EXPECTED_HOST,
     expectedPort: process.env.EXPECTED_PORT,
     poolMaxRead: process.env.POOL_MAX_READ,
