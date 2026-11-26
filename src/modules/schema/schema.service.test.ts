@@ -195,7 +195,7 @@ describeIfDocker("SchemaService Integration Tests (requires Docker)", () => {
         
         const pkConstraints = usersTable!.constraints.filter((c) => c.type === "PRIMARY KEY");
         expect(pkConstraints.length).toBeGreaterThanOrEqual(1);
-        expect(pkConstraints[0].column).toBe("id");
+        expect(pkConstraints[0].columns).toContain("id");
     });
 
     it("should discover foreign keys", async () => {
@@ -206,9 +206,10 @@ describeIfDocker("SchemaService Integration Tests (requires Docker)", () => {
         const fks = ordersTable!.constraints.filter((c) => c.type === "FOREIGN KEY");
         expect(fks.length).toBeGreaterThanOrEqual(1);
         
-        const userFk = fks.find((fk) => fk.column === "user_id");
+        const userFk = fks.find((fk) => fk.columns.includes("user_id"));
         expect(userFk).toBeDefined();
         expect(userFk?.referencedTable).toBe("users");
+        expect(userFk?.referencedSchema).toBe("test_schema");
     });
 
     it("should discover unique constraints via PRIMARY KEY and UNIQUE indexes", async () => {
