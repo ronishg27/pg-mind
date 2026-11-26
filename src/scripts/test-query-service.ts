@@ -1,17 +1,18 @@
-process.loadEnvFile(".env");
-
+import config from "../config/index.js";
 import { DatabaseService } from "../modules/database/database.service.js";
 import { SqlValidator } from "../modules/query/sql-validator.js";
 import { QueryService } from "../modules/query/query.service.js";
 
 async function main() {
-    const connectionString = process.env.QUERY_DATABASE_URL;
+    const connectionString = config.queryDatabaseUrl;
 
     if (!connectionString) {
         throw new Error("QUERY_DATABASE_URL is not configured");
     }
 
     const database = new DatabaseService(connectionString);
+    await database.verifyConnections();
+
     const validator = new SqlValidator();
     const queryService = new QueryService(database, validator);
 
@@ -59,6 +60,7 @@ async function main() {
         console.log({
             rowCount: limitResult.rowCount,
             truncated: limitResult.truncated,
+            truncatedReason: limitResult.truncatedReason,
             firstRow: limitResult.rows[0],
             lastRow: limitResult.rows.at(-1),
         });
@@ -83,11 +85,26 @@ async function main() {
         console.log({
             rowCount: largeResult.rowCount,
             truncated: largeResult.truncated,
+            truncatedReason: largeResult.truncatedReason,
             responseBytes,
             responseLimit: 1_000_000,
         });
+
+        // Test 6: ORDER BY preservation
+        console.log("\n--- ORDER BY Preservation ---");
+
+        const orderResult = await queryService.executeQuery(`
+      SELECT generate_series(1, 10) AS number
+      ORDER BY number DESC
+    `);
+
+        console.log({
+            rowCount: orderResult.rowCount,
+            numbers: orderResult.rows.map(r => r.number),
+            isDescending: orderResult.rows[0]?.number === 10 && orderResult.rows.at(-1)?.number === 1,
+        });
     } finally {
-        await database.close();
+        await database.shutdown();
     }
 }
 
