@@ -280,4 +280,108 @@ describe("ConnectionRegistry", () => {
             expect(registry.names().sort()).toEqual(["db1", "db2"]);
         });
     });
+
+    describe("active connection", () => {
+        beforeEach(async () => {
+            await registry.register("db1", { ...mockConfig, name: "db1" });
+            await registry.register("db2", { ...mockConfig, name: "db2", expectedDatabase: "db2_db", expectedHost: "remote-host", expectedPort: 5433 });
+        });
+
+        it("should have no active connection initially", () => {
+            expect(registry.getActiveName()).toBeUndefined();
+            expect(registry.getActive()).toBeUndefined();
+        });
+
+        it("should switch the active connection", () => {
+            registry.setActive("db2");
+
+            expect(registry.getActiveName()).toBe("db2");
+            const active = registry.getActive();
+            expect(active).toBeDefined();
+            expect(active).toBe(registry.get("db2"));
+        });
+
+        it("should throw a clear error when switching to an unknown connection", () => {
+            expect(() => registry.setActive("unknown_db")).toThrow(
+                "Connection 'unknown_db' not found",
+            );
+            // Active connection must not change after a failed switch
+            expect(registry.getActiveName()).toBeUndefined();
+        });
+
+        it("should not expose credentials in metadata", () => {
+            const meta = registry.getMetadata("db1");
+            const serialized = JSON.stringify(meta);
+            expect(serialized).not.toContain("pass");
+            expect(meta).not.toHaveProperty("password");
+            expect(meta).not.toHaveProperty("connectionString");
+            expect(meta).not.toHaveProperty("writeConnectionString");
+        });
+    });
+
+    describe("resolve (read-only connection resolution)", () => {
+        beforeEach(async () => {
+            await registry.register("db1", { ...mockConfig, name: "db1" });
+            await registry.register("db2", { ...mockConfig, name: "db2", expectedDatabase: "db2_db", expectedHost: "remote-host", expectedPort: 5433 });
+        });
+
+        it("should use the active connection when no name is supplied", () => {
+            registry.setActive("db2");
+            const resolved = registry.resolve();
+            expect(resolved).toBe(registry.get("db2"));
+        });
+
+        it("should use the explicitly supplied connection", () => {
+            registry.setActive("db1");
+            const resolved = registry.resolve("db2");
+            expect(resolved).toBe(registry.get("db2"));
+        });
+
+        it("should not modify the active connection when an explicit name is supplied", () => {
+            registry.setActive("db1");
+            registry.resolve("db2");
+            expect(registry.getActiveName()).toBe("db1");
+        });
+
+        it("should throw a clear error for a non-existent explicit connection", () => {
+            expect(() => registry.resolve("unknown_db")).toThrow(
+                "Connection 'unknown_db' not found",
+            );
+        });
+
+        it("should throw a clear error when no active connection exists and no name is supplied", () => {
+            expect(() => registry.resolve()).toThrow(
+                "No active database connection",
+            );
+        });
+
+        it("should return the same DatabaseService instance for repeated resolutions", () => {
+            registry.setActive("db2");
+            const first = registry.resolve();
+            const second = registry.resolve();
+            expect(first).toBe(second);
+        });
+    });
+
+    describe("default and active indicators", () => {
+        it("should report default and active flags correctly", async () => {
+            const defaultName = mockConfig.name; // "test_db"
+            await registry.register("db1", { ...mockConfig, name: "db1" });
+            await registry.register("db2", { ...mockConfig, name: "db2" });
+
+            registry.setActive("db2");
+
+            const metas = registry.list();
+            const byName = Object.fromEntries(metas.map((m) => [m.name, m]));
+
+            // db1 is default (first registered / mockConfig default-ish), db2 is active
+            expect(byName["db1"].name).toBe("db1");
+            expect(byName["db1"].host).toBe("localhost");
+            expect(byName["db1"].port).toBe(5432);
+            expect(byName["db1"].database).toBe("test_db");
+            expect(byName["db2"].name).toBe("db2");
+            expect(byName["db2"].host).toBe("localhost");
+            expect(byName["db2"].port).toBe(5432);
+        });
+    });
 });

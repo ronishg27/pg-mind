@@ -12,6 +12,7 @@ export class ConnectionRegistry {
     private readonly metadata = new Map<string, ConnectionMetadata>();
     protected readonly maxConnections: number;
     private readonly versionCounter = new Map<string, number>();
+    private activeConnectionName: string | undefined;
 
     constructor(maxConnections: number = 20) {
         this.maxConnections = maxConnections;
@@ -157,6 +158,61 @@ export class ConnectionRegistry {
     }
 
     /**
+     * Resolve the DatabaseService to use for a read-only operation.
+     *
+     * Resolution behavior:
+     * 1. If connectionName is provided, use that configured connection.
+     * 2. Otherwise, use the currently active connection.
+     * 3. If the selected connection does not exist, throw a clear error.
+     *
+     * Explicit connectionName selection does NOT modify the active connection.
+     * @throws Error if no connection can be resolved
+     */
+    resolve(connectionName?: string): DatabaseService {
+        const name = connectionName ?? this.activeConnectionName;
+
+        if (!name) {
+            throw new Error(
+                "No active database connection. Use switch_database to select a connection.",
+            );
+        }
+
+        return this.get(name);
+    }
+
+    /**
+     * Switch the active connection to the configured connection with the given name.
+     * Does not close or recreate any pools.
+     * @throws Error if the connection name is unknown
+     */
+    setActive(connectionName: string): void {
+        if (!this.connections.has(connectionName)) {
+            const available = this.names().join(", ") || "none";
+            throw new Error(
+                `Connection '${connectionName}' not found. Available connections: ${available}`,
+            );
+        }
+        this.activeConnectionName = connectionName;
+    }
+
+    /**
+     * Get the name of the currently active connection.
+     */
+    getActiveName(): string | undefined {
+        return this.activeConnectionName;
+    }
+
+    /**
+     * Get the currently active DatabaseService.
+     */
+    getActive(): DatabaseService | undefined {
+        if (!this.activeConnectionName) {
+            return undefined;
+        }
+        return this.connections.get(this.activeConnectionName);
+    }
+
+    /**
      * Close all registered connections.
      * Used during application shutdown.
      */
@@ -174,6 +230,7 @@ export class ConnectionRegistry {
         await Promise.all(shutdownPromises);
         this.connections.clear();
         this.metadata.clear();
+        this.activeConnectionName = undefined;
     }
 
     /**
@@ -225,6 +282,10 @@ export async function initializeConnectionRegistry(
     );
 
     await Promise.all(registrationPromises);
+
+    // The active connection defaults to the configured default connection.
+    registry.setActive(getDatabaseConfig().default);
+
     globalRegistry = registry;
     return registry;
 }
