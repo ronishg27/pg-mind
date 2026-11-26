@@ -34,10 +34,9 @@ import { initializeConnectionRegistry, getConnectionRegistry, shutdownConnection
 import { getDatabaseConfig } from "./config/index.js";
 
 // Module-level service instances (initialized in main)
+// `database` is shared by the write/approval tools (unchanged in Stage 2).
+// Read-only tools resolve per-connection services via `resolveDatabase`.
 let database: DatabaseService;
-let queryService: QueryService;
-let schemaService: SchemaService;
-let diagnosticsService: DiagnosticsService;
 let approvalService: ApprovalService;
 let operationExecutionService: OperationExecutionService;
 
@@ -65,6 +64,23 @@ const approvalWorkflow = new ApprovalWorkflowService(
 const operationExecutionWorkflow = new OperationExecutionWorkflowService(
     null as any, // Will be set after operationExecutionService creation
 );
+
+// Helper: resolve the DatabaseService to use for a read-only operation.
+// If connectionName is provided, use that connection; otherwise use the active
+// connection. Explicit selection does not modify the active connection.
+// Throws a clear error if the selected connection does not exist.
+function resolveDatabase(connectionName?: string): DatabaseService {
+    const registry = getConnectionRegistry();
+    try {
+        return registry.resolve(connectionName);
+    } catch (err) {
+        const name = connectionName ?? registry.getActiveName() ?? "<none>";
+        throw createToolError(
+            "CONNECTION_FAILURE",
+            `Database connection '${name}' not found`,
+        );
+    }
+}
 
 // Tool: ping
 registerTool(server, createReadOnlyTool(
@@ -96,12 +112,16 @@ registerTool(server, createReadOnlyNonIdempotentTool(
             .min(1, "SQL query cannot be empty")
             .max(50_000, "SQL query exceeds the maximum length of 50,000 characters")
             .describe("The SQL query to execute"),
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
     }),
-    async ({ sql }) => {
+    async ({ sql, connectionName }) => {
         const validation = validator.validate(sql);
         if (!validation.valid) {
             return createErrorResult(handleValidationError(new Error(validation.reason)));
         }
+
+        const database = resolveDatabase(connectionName);
+        const queryService = new QueryService(database, validator);
 
         const normalizedSql = sql.trim().replace(/;\s*$/, "");
 
@@ -113,6 +133,74 @@ registerTool(server, createReadOnlyNonIdempotentTool(
                 rowCount: result.rowCount,
             });
         });
+    },
+));
+
+// Tool: list_databases
+registerTool(server, createReadOnlyTool(
+    "list_databases",
+    "List all configured database connections. Returns each connection's name, database, host, port, " +
+    "whether it is the default, and whether it is currently active. Credentials are not exposed.",
+    z.object({}),
+    async () => {
+        const registry = getConnectionRegistry();
+        const defaultName = registry.getDefaultName();
+        const activeName = registry.getActiveName();
+        const databases = registry.list().map((meta) => ({
+            connectionName: meta.name,
+            databaseName: meta.database,
+            host: meta.host,
+            port: meta.port,
+            isDefault: meta.name === defaultName,
+            isActive: meta.name === activeName,
+        }));
+        return createSuccessResult({ databases });
+    },
+));
+
+// Tool: get_active_database
+registerTool(server, createReadOnlyTool(
+    "get_active_database",
+    "Return information about the currently active database connection: connection name, database name, " +
+    "host and port, and whether it is the configured default. Credentials are not exposed.",
+    z.object({}),
+    async () => {
+        const registry = getConnectionRegistry();
+        const activeName = registry.getActiveName();
+        if (!activeName) {
+            return createErrorResult(createToolError("CONNECTION_FAILURE", "No active database connection"));
+        }
+        const meta = registry.getMetadata(activeName);
+        return createSuccessResult({ database: {
+            connectionName: meta.name,
+            databaseName: meta.database,
+            host: meta.host,
+            port: meta.port,
+            isDefault: meta.name === registry.getDefaultName(),
+        }});
+    },
+));
+
+// Tool: switch_database
+registerTool(server, createReadOnlyTool(
+    "switch_database",
+    "Switch the active database connection to the configured connection with the given name. " +
+    "Returns the selected connection's metadata. Returns a clear error for unknown connection names. " +
+    "Pools are not closed or recreated when switching.",
+    z.object({
+        connectionName: z.string().min(1).describe("Name of the database connection to activate"),
+    }),
+    async ({ connectionName }) => {
+        const registry = getConnectionRegistry();
+        registry.setActive(connectionName);
+        const meta = registry.getMetadata(connectionName);
+        return createSuccessResult({ database: {
+            connectionName: meta.name,
+            databaseName: meta.database,
+            host: meta.host,
+            port: meta.port,
+            isDefault: meta.name === registry.getDefaultName(),
+        }});
     },
 ));
 
@@ -131,10 +219,15 @@ registerTool(server, createReadOnlyTool(
         includeFunctions: z.boolean().optional().default(true).describe("Include functions"),
         includeIndexes: z.boolean().optional().default(true).describe("Include indexes"),
         includeConstraints: z.boolean().optional().default(true).describe("Include constraints"),
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
     }),
     async (params) => {
+        const { connectionName, ...schemaParams } = params;
+        const database = resolveDatabase(connectionName);
+        const schemaService = new SchemaService(database);
+
         return executeWithCancellation(undefined, async () => {
-            const result = await schemaService.getDatabaseSchema(params);
+            const result = await schemaService.getDatabaseSchema(schemaParams);
             return createSuccessResult(result);
         });
     },
@@ -197,12 +290,20 @@ registerTool(server, createReadOnlyNonIdempotentTool(
         costs: z.boolean().optional().default(true).describe("Show cost estimates"),
         buffers: z.boolean().optional().default(true).describe("Show buffer usage"),
         timing: z.boolean().optional().default(true).describe("Show timing information"),
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
     }),
-    async ({ sql, analyze, format, verbose, costs, buffers, timing }) => {
+    async ({ sql, analyze, format, verbose, costs, buffers, timing, connectionName }) => {
         const validation = validator.validate(sql);
         if (!validation.valid) {
             return createErrorResult(handleValidationError(new Error(validation.reason)));
         }
+
+        const database = resolveDatabase(connectionName);
+        const diagnosticsService = new DiagnosticsService(
+            database,
+            new SchemaService(database),
+            validator,
+        );
 
         return executeWithCancellation(undefined, async () => {
             const result = await diagnosticsService.explainQuery(sql, {
@@ -226,12 +327,20 @@ registerTool(server, createReadOnlyTool(
     "high cost operations, and row estimate errors. Returns structured issues with severity and recommendations.",
     z.object({
         sql: z.string().min(1).max(50_000).describe("The SQL query to analyze"),
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
     }),
-    async ({ sql }) => {
+    async ({ sql, connectionName }) => {
         const validation = validator.validate(sql);
         if (!validation.valid) {
             return createErrorResult(handleValidationError(new Error(validation.reason)));
         }
+
+        const database = resolveDatabase(connectionName);
+        const diagnosticsService = new DiagnosticsService(
+            database,
+            new SchemaService(database),
+            validator,
+        );
 
         return executeWithCancellation(undefined, async () => {
             const result = await diagnosticsService.analyzeQueryPlan(sql);
@@ -248,8 +357,16 @@ registerTool(server, createReadOnlyTool(
     "Returns structured diagnosis with affected database objects and remediation steps.",
     z.object({
         errorMessage: z.string().min(1).describe("The PostgreSQL error message to diagnose"),
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
     }),
-    async ({ errorMessage }) => {
+    async ({ errorMessage, connectionName }) => {
+        const database = resolveDatabase(connectionName);
+        const diagnosticsService = new DiagnosticsService(
+            database,
+            new SchemaService(database),
+            validator,
+        );
+
         return executeWithCancellation(undefined, async () => {
             const error = new Error(errorMessage);
             const result = await diagnosticsService.diagnoseError(error);
@@ -267,8 +384,16 @@ registerTool(server, createReadOnlyTool(
     z.object({
         schemaName: z.string().min(1).describe("Schema name"),
         tableName: z.string().min(1).describe("Table name"),
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
     }),
-    async ({ schemaName, tableName }) => {
+    async ({ schemaName, tableName, connectionName }) => {
+        const database = resolveDatabase(connectionName);
+        const diagnosticsService = new DiagnosticsService(
+            database,
+            new SchemaService(database),
+            validator,
+        );
+
         return executeWithCancellation(undefined, async () => {
             const result = await diagnosticsService.getIndexDiagnostics(schemaName, tableName);
             return createSuccessResult(result);
@@ -282,8 +407,12 @@ registerTool(server, createReadOnlyTool(
     "Get schema metadata for a specific schema. More efficient than get_database_schema when you only need one schema.",
     z.object({
         schemaName: z.string().min(1).describe("Schema name to retrieve"),
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
     }),
-    async ({ schemaName }) => {
+    async ({ schemaName, connectionName }) => {
+        const database = resolveDatabase(connectionName);
+        const schemaService = new SchemaService(database);
+
         return executeWithCancellation(undefined, async () => {
             const result = await schemaService.getSchema(schemaName);
             if (!result) {
@@ -301,8 +430,12 @@ registerTool(server, createReadOnlyTool(
     z.object({
         schemaName: z.string().min(1).describe("Schema name"),
         tableName: z.string().min(1).describe("Table name"),
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
     }),
-    async ({ schemaName, tableName }) => {
+    async ({ schemaName, tableName, connectionName }) => {
+        const database = resolveDatabase(connectionName);
+        const schemaService = new SchemaService(database);
+
         return executeWithCancellation(undefined, async () => {
             const result = await schemaService.getTable(schemaName, tableName);
             if (!result) {
@@ -317,8 +450,13 @@ registerTool(server, createReadOnlyTool(
 registerTool(server, createReadOnlyTool(
     "list_schemas",
     "List all accessible schema names in the database.",
-    z.object({}),
-    async () => {
+    z.object({
+        connectionName: z.string().optional().describe("Name of the database connection to use (defaults to the active connection)"),
+    }),
+    async ({ connectionName }) => {
+        const database = resolveDatabase(connectionName);
+        const schemaService = new SchemaService(database);
+
         return executeWithCancellation(undefined, async () => {
             const result = await schemaService.listSchemas();
             return createSuccessResult({ schemas: result });
@@ -330,13 +468,8 @@ async function initializeServices(): Promise<void> {
     // Initialize connection registry with all configured databases
     const registry = await initializeConnectionRegistry(20);
 
-    // Use default connection for existing services
+    // Use default connection for existing write/approval services (unchanged in Stage 2)
     database = registry.getDefault();
-
-    // Initialize services that depend on database
-    queryService = new QueryService(database, validator);
-    schemaService = new SchemaService(database);
-    diagnosticsService = new DiagnosticsService(database, schemaService, validator);
 
     approvalService = new ApprovalService(
         approvalStore,
