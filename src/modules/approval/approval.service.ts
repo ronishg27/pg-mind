@@ -11,7 +11,11 @@ export class ApprovalService {
         private readonly databaseService: DatabaseService,
     ) {}
 
-    async prepareOperation(sql: string) {
+    async prepareOperation(
+        sql: string,
+        connectionName?: string,
+        databaseService?: DatabaseService,
+    ) {
         const analysis = this.analysisService.analyzeWrite(sql);
 
         if (!analysis.isSupported) {
@@ -20,7 +24,9 @@ export class ApprovalService {
             );
         }
 
-        const databaseResult = await this.databaseService.query<{
+        const db = databaseService ?? this.databaseService;
+
+        const databaseResult = await db.query<{
             database: string;
         }>("SELECT current_database() as database");
 
@@ -34,6 +40,7 @@ export class ApprovalService {
             sql,
             operation: analysis.operation,
             database,
+            connectionName,
         });
     }
 

@@ -15,6 +15,7 @@ export interface ApprovalRequest {
     sql: string;
     operation: SqlOperation;
     database: string;
+    connectionName?: string;
     status: ApprovalStatus;
     createdAt: Date;
     expiresAt: Date;

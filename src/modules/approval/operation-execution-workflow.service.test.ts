@@ -23,6 +23,7 @@ describe("OperationExecutionWorkflowService", () => {
 
         expect(executionService.executeOperation).toHaveBeenCalledWith(
             "approval-123",
+            undefined,
         );
 
         expect(result).toEqual({

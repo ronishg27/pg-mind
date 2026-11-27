@@ -76,6 +76,46 @@ describe("OperationExecutionService", () => {
         expect(store.getById(request.id)?.status).toBe("executed");
     });
 
+    it("should execute against a non-default database service when provided", async () => {
+        const request = createApprovedRequest();
+
+        // Default database service (not used)
+        database.withWriteTransaction.mockImplementation(
+            async (callback: (client: unknown) => Promise<number>) => {
+                throw new Error("default database should not be used");
+            },
+        );
+
+        // Alternate database service representing a different connection (e.g. pgmind_dev)
+        const alternateWithWriteTransaction = vi.fn();
+        const alternateDatabase = {
+            withWriteTransaction: alternateWithWriteTransaction,
+        } as unknown as DatabaseService;
+
+        alternateWithWriteTransaction.mockImplementation(
+            async (callback: (client: unknown) => Promise<number>) => {
+                return callback({
+                    query: vi.fn().mockResolvedValue({
+                        rowCount: 3,
+                    }),
+                });
+            },
+        );
+
+        const result = await service.executeOperation(request.id, alternateDatabase);
+
+        expect(result).toEqual({
+            approvalId: request.id,
+            operation: "UPDATE",
+            database: "pgmind_dev",
+            affectedRows: 3,
+            status: "executed",
+        });
+
+        expect(alternateWithWriteTransaction).toHaveBeenCalledTimes(1);
+        expect(database.withWriteTransaction).not.toHaveBeenCalled();
+    });
+
     it("should mark a failed operation as failed", async () => {
         const request = createApprovedRequest();
 

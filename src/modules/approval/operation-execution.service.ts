@@ -65,13 +65,15 @@ export class OperationExecutionService {
 
     async executeOperation(
         approvalId: string,
+        databaseService?: DatabaseService,
     ): Promise<OperationExecutionResult> {
         const execution = this.prepareExecution(approvalId);
 
         let affectedRows: number;
+        const db = databaseService ?? this.databaseService;
 
         try {
-            affectedRows = await this.databaseService.withWriteTransaction(
+            affectedRows = await db.withWriteTransaction(
                 async (client) => {
                     const result = await client.query(execution.sql);
 

@@ -1,3 +1,4 @@
+import type { DatabaseService } from "../database/database.service.js";
 import type { ApprovalService } from "./approval.service.js";
 import type { ApprovalConfirmationProvider } from "./approval-confirmation.js";
 
@@ -7,8 +8,16 @@ export class ApprovalWorkflowService {
         private readonly confirmationProvider: ApprovalConfirmationProvider,
     ) {}
 
-    async prepareAndConfirm(sql: string) {
-        const request = await this.approvalService.prepareOperation(sql);
+    async prepareAndConfirm(
+        sql: string,
+        connectionName?: string,
+        databaseService?: DatabaseService,
+    ) {
+        const request = await this.approvalService.prepareOperation(
+            sql,
+            connectionName,
+            databaseService,
+        );
 
         const summary = this.createSummary(request.operation);
 

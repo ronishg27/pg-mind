@@ -241,15 +241,18 @@ registerTool(server, createWriteToolRequiresApproval(
     "Requires human confirmation via MCP elicitation before execution.",
     z.object({
         sql: z.string().min(1).max(50_000).describe("The SQL write operation to prepare"),
+        connectionName: z.string().optional().describe("Name of the database connection to target (defaults to the active/default connection)"),
     }),
-    async ({ sql }) => {
+    async ({ sql, connectionName }) => {
         const validation = writeSqlValidator.validate(sql);
         if (!validation.valid) {
             return createErrorResult(handleValidationError(new Error(validation.reason)));
         }
 
+        const database = resolveDatabase(connectionName);
+
         return executeWithCancellation(undefined, async () => {
-            const result = await approvalWorkflow.prepareAndConfirm(sql);
+            const result = await approvalWorkflow.prepareAndConfirm(sql, connectionName, database);
             return createSuccessResult(result, { approvalId: result.id });
         });
     },
@@ -267,7 +270,11 @@ registerTool(server, createWriteToolExecutes(
     }),
     async ({ approvalId }) => {
         return executeWithCancellation(undefined, async () => {
-            const result = await operationExecutionWorkflow.execute(approvalId);
+            // Read the approval to determine which connection the operation targets,
+            // so execution runs against the same database it was prepared for.
+            const request = approvalStore.getById(approvalId);
+            const database = resolveDatabase(request?.connectionName);
+            const result = await operationExecutionWorkflow.execute(approvalId, database);
             return createSuccessResult(result, {
                 approvalId: result.approvalId,
                 affectedRows: result.affectedRows,
@@ -486,7 +493,7 @@ async function initializeServices(): Promise<void> {
 
     // Update workflow services with initialized dependencies
     (approvalWorkflow as any).approvalService = approvalService;
-    (operationExecutionWorkflow as any).operationExecutionService = operationExecutionService;
+    (operationExecutionWorkflow as any).executionService = operationExecutionService;
 
     // Verify connections
     await database.verifyConnections();
