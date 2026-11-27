@@ -37,7 +37,7 @@ MCP Client (OpenCode / other)
 PGMind TypeScript Application (src/index.ts)
 ├── MCP tools: ping, execute_query, get_database_schema,
 │   get_schema, get_table, list_schemas,
-│   prepare_operation, execute_approved_operation,
+│   prepare_operation, execute_approved_operation, reload_configuration,
 │   explain_query, analyze_query_plan, diagnose_error,
 │   get_index_diagnostics
 ├── Services: database, schema, query, approval
@@ -137,6 +137,7 @@ The server runs on stdio. Configure your MCP client (e.g., OpenCode) to point at
 | `get_index_diagnostics` | Get index usage stats and suggestions | No |
 | `prepare_operation` | Prepare a write operation for approval | No (stores approval only) |
 | `execute_approved_operation` | Execute an approved write operation | Yes |
+| `reload_configuration` | Reload pg-mind.config.yaml at runtime | No |
 
 See `docs/architecture.md` and the tool handler implementations in `src/index.ts` for input schemas, validation behavior, and security restrictions.
 
@@ -148,6 +149,7 @@ See `docs/architecture.md` and the tool handler implementations in `src/index.ts
 4. **Write operations require human approval.** `prepare_operation` prepares a write (INSERT, UPDATE, DELETE, or allowlisted DDL) and requests confirmation; `execute_approved_operation` runs it only after approval, using a separate write pool (`WRITE_DATABASE_URL`). Writes are not impossible at the connection level — gate them at the approval layer.
 5. **LLMs never execute SQL directly.** Generated SQL passes deterministic validation before execution.
 6. **Application-level validation is not a complete security boundary.** Database-level role permissions (`pgmind_readonly`, `pgmind_writer`) are the primary enforcement boundary.
+7. **Connection-aware write approvals.** An approved write operation always executes against the exact database connection it was prepared for, regardless of subsequent active database changes. The connection identity (`connectionName`, `database`, and `connectionGeneration`) is captured at preparation time and verified at execution time. Configuration reloads cannot redirect existing approvals to replacement or different connections.
 
 ## Development Commands (run from repo root)
 
@@ -155,6 +157,8 @@ See `docs/architecture.md` and the tool handler implementations in `src/index.ts
 - `pnpm build` — `tsc` → `dist/`
 - `pnpm start` — `node dist/index.js` (requires `pnpm build` first)
 - `pnpm typecheck` — `tsc --noEmit`
+- `pnpm lint` — `eslint .`
+- `pnpm lint:fix` — `eslint . --fix`
 - `pnpm test` — `vitest run --coverage`
 - `pnpm test:watch` — `vitest watch`
 

@@ -22,7 +22,9 @@ PGMind uses a **defense-in-depth** approach. No single layer is relied upon as t
 
 9. **Approval expiration** — approvals expire after five minutes. Expired pending or approved requests transition to `expired` and cannot execute.
 
-10. **Database and role verification** — `withWriteTransaction` verifies `current_database()` matches the approval request's database and `current_user` matches the configured writer role (`writeRoleName`, default `pgmind_writer`, overridable via `WRITE_ROLE_NAME`) before executing anything.
+10. **Connection-aware approvals** — each approval retains its original `connectionName`, `database`, and `connectionGeneration` identity. Execution always resolves the originally stored connection, never the currently active connection. Configuration reloads increment the connection generation, so old approvals cannot execute against replacement connections.
+
+11. **Database and role verification** — `withWriteTransaction` verifies `current_database()` matches the approval request's database and `current_user` matches the configured writer role (`writeRoleName`, default `pgmind_writer`, overridable via `WRITE_ROLE_NAME`) before executing anything.
 
 11. **Transaction management** — writes run inside a transaction with `COMMIT`/`ROLLBACK`. Read queries run inside `BEGIN READ ONLY` transactions. A failed ROLLBACK causes the connection client to be discarded from the pool rather than returned for reuse, preventing an uncertain connection from being recycled.
 

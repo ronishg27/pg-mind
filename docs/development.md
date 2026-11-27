@@ -22,6 +22,8 @@ All scripts run from the repo root.
 | `build` | `tsc` | Compile TypeScript to `dist/` |
 | `start` | `node dist/index.js` | Run the compiled MCP server (requires `build` first) |
 | `typecheck` | `tsc --noEmit` | Type-check without emitting |
+| `lint` | `eslint .` | Lint TypeScript source |
+| `lint:fix` | `eslint . --fix` | Auto-fix lint issues |
 | `test` | `vitest run --coverage` | Run all unit tests with coverage |
 | `test:watch` | `vitest watch` | Run tests in watch mode |
 | `db:test` | `tsx src/scripts/test-database.ts` | Test read connection (uses `DATABASE_URL`) |
@@ -49,9 +51,9 @@ Tests are colocated with source at `src/**/*.test.ts` (Vitest). There is no sepa
 
 A fresh run of `pnpm test` produces:
 
-- **9 test files passed**
-- **205 tests passed**
-- Duration: ~2–5 seconds
+- **11 test files passed**
+- **309 tests passed** (unit tests; Docker integration tests run separately)
+- Duration: ~2–5 seconds for unit tests; ~70 seconds including Docker integration tests
 
 Test coverage by module:
 

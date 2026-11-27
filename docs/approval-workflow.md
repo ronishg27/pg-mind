@@ -18,9 +18,24 @@ PGMind's write operations are gated behind explicit human approval. Supported wr
 - **Expiration checks on access.** When a `pending` or `approved` request is accessed and its TTL has passed, it transitions to `expired`.
 - **Expired request cleanup.** `deleteExpired()` removes expired `pending` and `approved` requests and returns the count deleted.
 
+### Approval request fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | UUID approval ID |
+| `sql` | `string` | The exact SQL statement to execute |
+| `operation` | `SqlOperation` | Classified operation type (INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE) |
+| `database` | `string` | Actual database name from `SELECT current_database()` at preparation |
+| `connectionName` | `string \| undefined` | Configured connection name the operation targets |
+| `connectionGeneration` | `number \| undefined` | Immutable connection instance/generation token, incremented on connection replacement (e.g. config reload) |
+| `status` | `ApprovalStatus` | Current lifecycle status |
+| `createdAt` | `Date` | Creation timestamp |
+| `expiresAt` | `Date` | Expiration timestamp (5 minutes TTL) |
+| `affectedRows` | `number \| undefined` | Rows affected after execution |
+
 **Limitation:** Approval requests disappear when the server restarts. In-memory storage is not durable.
 
-## Approval Status Lifecycle
+## Connection-Aware Approval Guarantees
 
 The possible status values are:
 
@@ -57,6 +72,29 @@ execution_unknown → (terminal)
 - **The transition from `approved` to `executing` happens synchronously before database execution** to prevent duplicate claims between the check and the execution.
 - **An execution with an uncertain commit outcome cannot be retried automatically.** It is marked `execution_unknown` (terminal). A retry attempt fails because the status is no longer `approved`.
 
+## Connection-Aware Approval Guarantees
+
+PGMind's write approval workflow is **connection-aware**. An approved operation must always execute against the exact database connection used when it was prepared, regardless of subsequent active database changes or configuration reloads.
+
+1. **Connection resolution during preparation.** `prepare_operation` supports an optional `connectionName`. If supplied, that configured connection is used; otherwise the currently active connection is used. Unknown connection names are rejected with a clear error. The active connection is never changed by an explicit `connectionName`.
+
+2. **Connection identity bound to approval records.** The approval record retains `connectionName` (the configured connection name) and `database` (the actual database name), plus `connectionGeneration` (an immutable token incremented each time the underlying connection instance is replaced). Approvals remain associated with their original connection throughout their lifecycle.
+
+3. **Connection-aware execution.** `execute_approved_operation` resolves the originally stored connection from the approval record — never the current active connection. If the original connection is no longer configured, execution fails safely rather than falling back to the default or active connection. The stored `connectionGeneration` is checked against the current generation; if they differ (e.g. the connection was replaced by a configuration reload), execution is rejected.
+
+4. **No credential storage.** Approval records never store database credentials or connection URLs.
+
+## Configuration Reload and Pending Approvals
+
+When `reload_configuration` is invoked:
+
+- **Unchanged connection:** Existing approvals continue working — the connection instance and generation are unchanged.
+- **Modified connection:** Existing approvals fail safely at execution. The connection's generation is incremented on replacement, and `OperationExecutionService` verifies the stored generation matches before executing.
+- **Removed connection:** Existing approvals fail safely because the connection no longer exists in the registry.
+- **Re-added connection with the same name:** Treated as a new connection instance — its generation is incremented, so old approvals prepared against the previous instance cannot execute against it.
+
+Configuration reload never redirects existing approvals to replacement or different connections.
+
 ## Approval Confirmation
 
 ### `ApprovalConfirmationProvider` Interface
@@ -73,8 +111,9 @@ export type ApprovalDecision = "approve" | "reject" | "cancel";
 
 Uses the MCP server's `elicitInput` mechanism with `mode: "form"`. The confirmation prompt displays:
 
+- **Connection name** (from the stored approval request).
+- **Database name** (from the stored approval request).
 - **Operation type** (e.g., UPDATE).
-- **Database name** (from the approval request).
 - **Operation summary** (human-readable description of INSERT/UPDATE/DELETE/CREATE/ALTER/DROP/TRUNCATE).
 - **Complete SQL statement** (the exact statement to be executed).
 - **Explicit approve/reject choice** (enum: `approve` / `reject`).

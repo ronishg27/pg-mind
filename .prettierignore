@@ -1,0 +1,25 @@
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Test coverage
+coverage/
+
+# Environment / secrets
+.env
+.env.*
+pg-mind.config.yaml
+
+# Docs (hand-written prose, keep as-is)
+*.md
+*.yaml
+*.yml
+
+# Misc
+.cache/
+.temp/
+temp_files/

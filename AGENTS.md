@@ -11,9 +11,13 @@ Instructions for AI coding agents working in this repository.
 - `pnpm typecheck` — `tsc --noEmit`
 - `pnpm test` — `vitest run --coverage`
 - `pnpm test:watch` — `vitest watch`
+- `pnpm lint` — `eslint .`
+- `pnpm lint:fix` — `eslint . --fix`
+- `pnpm format` — `prettier --write "src/**/*.ts"`
+- `pnpm format:check` — `prettier --check "src/**/*.ts"`
 - `pnpm db:test` / `db:schema` / `db:tables` / `db:columns` / `db:constraints` / `db:schema:full` / `query:test` / `db:write:test` — `tsx src/scripts/test-*.ts`; require a running PostgreSQL
 - Run one test file: `vitest run src/modules/query/sql-validator.test.ts`
-- There is **no `pnpm lint`** script and no ESLint/Prettier config
+- Linting: ESLint flat config (`eslint.config.js`, TypeScript recommended + Prettier integration). Formatting: Prettier (`.prettierrc`, 4-space indent, single quotes, semicolons, LF). A pre-commit hook (`.husky/pre-commit`) runs `lint-staged`, which formats staged `.ts` files with Prettier before each commit.
 
 ## Project overview
 
@@ -46,7 +50,7 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 - Validation with Zod. SQL parsed with `pgsql-ast-parser`.
 - Database access via `pg` pool directly; no ORM.
 - Follow existing module and test-file organization. Use the scripts defined in `package.json`.
-- Run `pnpm typecheck` and `pnpm test` after relevant changes.
+- Run `pnpm typecheck`, `pnpm lint`, and `pnpm format:check` after relevant changes.
 
 ## SQL safety rules
 

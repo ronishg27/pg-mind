@@ -10,10 +10,10 @@ User → OpenCode LLM → PGMind MCP Server → PGMind Services → PostgreSQL.
 
 ```
 src/
-├── index.ts                  # MCP server entry point; registers all 5 tools
-├── config/index.ts           # Environment configuration
+├── index.ts                  # MCP server entry point; registers all tools
+├── config/index.ts           # Environment configuration + reloadConfiguration()
 ├── modules/
-│   ├── database/             # DatabaseService (read + write pools)
+│   ├── database/             # DatabaseService (read + write pools), ConnectionRegistry (multi-connection, reload)
 │   ├── schema/               # SchemaService (schema introspection)
 │   ├── query/                # SqlValidator, SqlOperationClassifier, WriteSqlValidator, QueryService
 │   └── approval/             # ApprovalStore, ApprovalService, ApprovalWorkflowService,
@@ -188,7 +188,59 @@ Twelve tools are registered in `src/index.ts`:
 | `analyze_query_plan` | `{ sql: string }` (1–50,000 chars) | JSON `QueryPlanAnalysis` (summary, issues, recommendations) | No |
 | `diagnose_error` | `{ errorMessage: string }` | JSON `ErrorDiagnosis` (error, explanation, affectedObjects, suggestedActions) | No |
 | `get_index_diagnostics` | `{ schemaName: string, tableName: string }` | JSON `IndexDiagnosticsResult` (indexes, suggestions) | No |
-| `prepare_operation` | `{ sql: string }` (1–50,000 chars) | JSON `{ id, status, message }` | No (stores approval only) |
+| `prepare_operation` | `{ sql: string, connectionName?: string }` (1–50,000 chars) | JSON `{ id, status, message }` | No (stores approval only) |
 | `execute_approved_operation` | `{ approvalId: uuid }` | JSON `{ approvalId, operation, database, affectedRows, status, message }` | Yes |
+| `reload_configuration` | `{}` | JSON `{ added, removed, modified, unchanged, activeConnectionName, defaultConnectionName, activeConnectionChanged }` | No |
 
 All tools catch errors and return MCP `isError` responses with the error message.
+
+## Runtime Configuration Reload (`reload_configuration`)
+
+PGMind supports reloading `pg-mind.config.yaml` at runtime without restarting the server. This is done through the `reload_configuration` MCP tool.
+
+### Reload behavior
+
+1. **Full validation first.** The entire new configuration is loaded and validated from disk before any registry change is applied. If validation fails (invalid YAML, missing required fields, invalid ports/pool settings, duplicate/invalid connection names, missing default), no change is made and the previous working configuration remains intact.
+
+2. **Connection lifecycle.** For each connection:
+   - **Added:** A new `DatabaseService` is created, its read and write pools are verified, and only then is it registered.
+   - **Modified:** Replacement pools are created and verified *before* replacing the existing service. If replacement initialization fails, the previous working connection is preserved and the reload fails with an error.
+   - **Removed:** The connection is unregistered and its pools are shut down.
+   - **Unchanged:** The existing `DatabaseService` instance and its pools are reused — no reconnection.
+
+3. **Pool draining.** `DatabaseService.shutdown()` closes both read and write pools. Old pools are closed only after they are no longer referenced by any registry state, so in-flight operations are not interrupted.
+
+4. **Concurrency guard.** Reloads are serialized via a re-entrancy flag. A concurrent reload attempt while one is in progress fails with `"Configuration reload already in progress. Please retry."` so registry state cannot be corrupted by concurrent reloads.
+
+5. **Default and active connection.**
+   - The configured default is updated when the YAML `default` changes.
+   - The current active connection is preserved if it still exists after reload.
+   - If the active connection was removed, execution falls back to the new configured default, and this is reported explicitly via `activeConnectionChanged: true`.
+   - Reloading never changes active selection merely because an unchanged connection was reloaded.
+
+6. **No credential exposure.** Reload results and connection metadata never include passwords, connection URLs, or other credentials.
+
+### Return value
+
+```json
+{
+  "added": ["db3"],
+  "removed": ["db2"],
+  "modified": [],
+  "unchanged": ["db1"],
+  "activeConnectionName": "db1",
+  "defaultConnectionName": "db1",
+  "activeConnectionChanged": false
+}
+```
+
+### Pending approval compatibility
+
+Existing approvals retain their original `connectionName`, `database`, and `connectionGeneration` identity across reloads:
+
+- **Unchanged connection:** Existing approvals continue working — the connection instance and generation are unchanged.
+- **Modified connection:** Existing approvals fail safely at execution. The connection's generation is incremented on replacement, and `OperationExecutionService` checks that the stored `connectionGeneration` matches the current generation before executing. If they differ, execution is rejected.
+- **Removed connection:** Existing approvals fail safely because `registry.get(connectionName)` throws when the connection no longer exists.
+- **Re-added connection with the same name:** Treated as a new connection instance — its generation is incremented, so old approvals prepared against the previous instance cannot execute against it.
+
+No credentials are stored in approval records.

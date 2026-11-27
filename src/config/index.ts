@@ -1,5 +1,13 @@
-import { loadConfiguration, getDefaultResolvedConnectionConfig, getAllResolvedConnectionConfigs } from "./configuration.loader.js";
-import type { DatabaseConfig, ResolvedConnectionConfig, ConnectionMetadata } from "./configuration.types.js";
+import {
+    loadConfiguration,
+    getDefaultResolvedConnectionConfig,
+    getAllResolvedConnectionConfigs,
+} from './configuration.loader.js';
+import type {
+    DatabaseConfig,
+    ResolvedConnectionConfig,
+    ConnectionMetadata,
+} from './configuration.types.js';
 
 // Lazy-loaded configuration
 let _databaseConfig: DatabaseConfig | null = null;
@@ -33,6 +41,18 @@ export function __resetConfigForTesting(): void {
 }
 
 /**
+ * Force a reload of the configuration from disk.
+ * Clears the cached configuration so the next call to getDatabaseConfig()
+ * re-reads pg-mind.config.yaml.
+ * @throws Error if the configuration file is missing or invalid
+ */
+export function reloadConfiguration(): DatabaseConfig {
+    _databaseConfig = null;
+    _configLoadError = null;
+    return getDatabaseConfig();
+}
+
+/**
  * Set configuration directly for testing.
  * @internal
  */
@@ -45,35 +65,36 @@ export function __setConfigForTesting(config: DatabaseConfig): void {
 // for backward compatibility
 const databaseConfigProxy = new Proxy({} as DatabaseConfig, {
     get(_target, prop: string | symbol) {
-        if (prop === "default") {
+        if (prop === 'default') {
             return getDatabaseConfig().default;
         }
-        if (prop === "connections") {
+        if (prop === 'connections') {
             return getDatabaseConfig().connections;
         }
-        if (prop === "pool") {
+        if (prop === 'pool') {
             return getDatabaseConfig().pool;
         }
-        if (prop === "expectedHost") {
+        if (prop === 'expectedHost') {
             return getDatabaseConfig().expectedHost;
         }
-        if (prop === "expectedPort") {
+        if (prop === 'expectedPort') {
             return getDatabaseConfig().expectedPort;
         }
-        if (prop === "statementTimeoutMs") {
+        if (prop === 'statementTimeoutMs') {
             return getDatabaseConfig().statementTimeoutMs;
         }
-        if (prop === "lockTimeoutMs") {
+        if (prop === 'lockTimeoutMs') {
             return getDatabaseConfig().lockTimeoutMs;
         }
-        if (prop === "idleInTransactionTimeoutMs") {
+        if (prop === 'idleInTransactionTimeoutMs') {
             return getDatabaseConfig().idleInTransactionTimeoutMs;
         }
-        if (prop === "applicationName") {
+        if (prop === 'applicationName') {
             return getDatabaseConfig().applicationName;
         }
         // For any other property, delegate to the actual config
         const config = getDatabaseConfig();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (config as any)[prop];
     },
     ownKeys() {
@@ -171,7 +192,12 @@ const ConfigSchema = {
 };
 
 // Export the new multi-database configuration system
-export { databaseConfigProxy as databaseConfig, loadConfiguration, getDefaultResolvedConnectionConfig, getAllResolvedConnectionConfigs };
+export {
+    databaseConfigProxy as databaseConfig,
+    loadConfiguration,
+    getDefaultResolvedConnectionConfig,
+    getAllResolvedConnectionConfigs,
+};
 export type { DatabaseConfig, ResolvedConnectionConfig, ConnectionMetadata };
 
 // Also export the function for internal use
