@@ -1,4 +1,6 @@
-# PostgreSQL MCP Server
+# PostgreSQL MCP Server — Original Project Specification (Baseline)
+
+> This document describes the **original project proposal / baseline**. It is preserved for historical reference. The current implementation has evolved beyond this scope (e.g., YAML-based multi-connection configuration, 16 MCP tools, runtime reload, connection-aware approvals). For the current implementation, see `README.md`, `TECH_STACK.md`, and `docs/`.
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # Approval Workflow
 
-PGMind's write operations are gated behind explicit human approval. Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). Approval and execution are separate steps:
+PG-mind's write operations are gated behind explicit human approval. Supported writes include INSERT, UPDATE, DELETE, and an explicitly allowlisted set of DDL operations (CREATE, ALTER, DROP, TRUNCATE). Approval and execution are separate steps:
 
 - **Approval** authorizes a specific SQL statement for later execution. It does **not** execute SQL.
 - **Execution** runs the approved SQL against the database, but only with a valid approval ID.
@@ -74,7 +74,7 @@ execution_unknown → (terminal)
 
 ## Connection-Aware Approval Guarantees
 
-PGMind's write approval workflow is **connection-aware**. An approved operation must always execute against the exact database connection used when it was prepared, regardless of subsequent active database changes or configuration reloads.
+PG-mind's write approval workflow is **connection-aware**. An approved operation must always execute against the exact database connection used when it was prepared, regardless of subsequent active database changes or configuration reloads.
 
 1. **Connection resolution during preparation.** `prepare_operation` supports an optional `connectionName`. If supplied, that configured connection is used; otherwise the currently active connection is used. Unknown connection names are rejected with a clear error. The active connection is never changed by an explicit `connectionName`.
 
@@ -148,7 +148,7 @@ Behavior:
    - Re-classifies and verifies the operation matches the stored operation.
    - Claims the approval: transitions `approved` → `executing` synchronously.
 8. `DatabaseService.withWriteTransaction`:
-   - Verifies `current_database()` matches the expected database and `current_user` matches the configured writer role (`writeRoleName`, default `pgmind_writer`).
+   - Verifies `current_database()` matches the expected database and `current_user` matches the configured username.
    - Sets `statement_timeout = '10s'`.
    - Executes the exact stored SQL.
    - Returns `rowCount` as `affectedRows`.

@@ -21,22 +21,52 @@ Instructions for AI coding agents working in this repository.
 
 ## Project overview
 
-PGMind is a **TypeScript-only MCP (Model Context Protocol) server** that connects to PostgreSQL, understands its schema, validates SQL for safety, executes read-only queries, and supports write operations behind explicit human approval. It exposes schema introspection, query execution, and write-operation management as MCP tools.
+PG-mind is a **TypeScript-only MCP (Model Context Protocol) server** that connects to PostgreSQL, understands its schema, validates SQL for safety, executes read-only queries, and supports write operations behind explicit human approval. It exposes schema introspection, query execution, and write-operation management as MCP tools.
 
-The architecture is a **modular TypeScript monolith** — business logic lives in independent services under `src/modules/` (`database`, `schema`, `query`, `approval`), not inside MCP tool handlers. PGMind does **not** contain its own LLM; the MCP client provides the AI agent.
+The architecture is a **modular TypeScript monolith** — business logic lives in independent services under `src/modules/` (`database`, `schema`, `query`, `approval`), not inside MCP tool handlers. PG-mind does **not** contain its own LLM; the MCP client provides the AI agent.
 
-**Two database connection pools:**
-- Read pool (`QUERY_DATABASE_URL`, required) — role `pgmind_readonly`, read-only queries only.
-- Write pool (`WRITE_DATABASE_URL`, optional) — role configured via `WRITE_ROLE_NAME` (default `pgmind_writer`), used only for approved write operations.
+## Configuration
+
+PG-mind is configured through **YAML**, not environment variables:
+
+- `pg-mind.config.yaml` is the local configuration file (gitignored, contains credentials).
+- `pg-mind.config.example.yaml` is the example configuration template.
+- The project supports **multiple named database connections**.
+- A **default connection** can be configured (`database.default`).
+- Connections can be **switched at runtime** via the `switch_database` MCP tool.
+- Read operations can explicitly target a connection using the optional `connectionName` parameter (this does **not** change the active connection).
+- Read and write pools use the **same configured credentials** for each connection. PG-mind does not enforce separate database roles; PostgreSQL permissions are the primary security boundary.
+
+The server loads `pg-mind.config.yaml` at startup via `src/config/index.ts` (`loadConfiguration`) and can reload it at runtime via the `reload_configuration` MCP tool. The app does **not** load `.env`; `.env` is only read directly by the `db:*` development test scripts.
+
+## MCP tools (16 registered in src/index.ts)
+
+1. `ping`
+2. `execute_query`
+3. `list_databases`
+4. `get_active_database`
+5. `switch_database`
+6. `reload_configuration`
+7. `get_database_schema`
+8. `prepare_operation`
+9. `execute_approved_operation`
+10. `explain_query`
+11. `analyze_query_plan`
+12. `diagnose_error`
+13. `get_index_diagnostics`
+14. `get_schema`
+15. `get_table`
+16. `list_schemas`
+
+Most tools accept an optional `connectionName` to target a specific connection without changing the active connection. `execute_approved_operation` accepts an approval ID (UUID), not arbitrary SQL.
 
 **SQL parsing:** `pgsql-ast-parser` (PostgreSQL-aware AST parser), not naive string checks. **Database access:** `pg` pool directly, no ORM.
 
 ## Setup
 
-- Copy `.env.example` to `.env` (`.env` is gitignored). The app loads it automatically via `process.loadEnvFile(".env")` in `src/index.ts` and `src/config/index.ts`.
-- Restart the MCP server after changing `.env`; the connection pool is created at startup.
-- Start infrastructure: `docker compose up -d`. The file is `docker-compose.yaml` and defines only `postgres` (no Ollama); it maps host **5433 → container 5432**. The local `.env` uses `localhost:5433`; `.env.example` shows 5432 — match your actual running port.
-- To run PGMind as an MCP server: `pnpm build`, then `node dist/index.js` (see `opencode-setup.md` for the OpenCode MCP server config pointing at `dist/index.js`).
+- Create `pg-mind.config.yaml` from `pg-mind.config.example.yaml` with your database connections. Restart the MCP server after changing the YAML (or use `reload_configuration`).
+- Start infrastructure: `docker compose up -d`. The file is `docker-compose.yaml` and defines only `postgres` (no Ollama); it maps host **5433 → container 5432**. The local `pg-mind.config.yaml` should use the matching port.
+- To run PG-mind as an MCP server: `pnpm build`, then `node dist/index.js` (see `opencode-setup.md` for the OpenCode MCP server config pointing at `dist/index.js`).
 
 ## Tests
 
@@ -64,8 +94,8 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 
 ## Database and transaction rules
 
-- `WRITE_ROLE_NAME` configures the expected writer role (default `pgmind_writer`).
-- **Runtime database and writer-role identity checks must remain** in `withWriteTransaction` — they verify `current_database()` matches the expected database and `current_user` matches the configured writer role.
+- Read and write pools use the same configured credentials per connection; there is no separate `WRITE_ROLE_NAME` enforced by the application. Database-level role permissions are the primary enforcement boundary.
+- **Runtime database and writer-role identity checks remain** in `withWriteTransaction` — they verify `current_database()` matches the expected database and `current_user` matches the configured username. These checks apply to the configured credentials, not to a separately configured writer role.
 - **Do not grant superuser privileges or unnecessary PostgreSQL permissions.** Database-level role permissions are the primary enforcement boundary.
 - **Preserve rollback-failure connection disposal:** if `ROLLBACK` fails after an operation error, the connection client is discarded from the pool rather than returned for reuse.
 - **Preserve `CommitOutcomeUnknownError` handling:** a failed COMMIT raises `CommitOutcomeUnknownError`, marks the execution as `execution_unknown`, and discards the client from the pool. **Never automatically retry** an operation with an unknown commit outcome — the operation may already have committed.
@@ -73,8 +103,8 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 
 ## Architecture (what actually exists)
 
-- Entry point: `src/index.ts` — builds the MCP stdio server and registers tools (`ping`, `execute_query`, `get_database_schema`, `get_schema`, `get_table`, `list_schemas`, `prepare_operation`, `execute_approved_operation`, `explain_query`, `analyze_query_plan`, `diagnose_error`, `get_index_diagnostics`).
-- Config: `src/config/index.ts` (`QUERY_DATABASE_URL`, `WRITE_DATABASE_URL`, `writeRoleName` default `pgmind_writer`).
+- Entry point: `src/index.ts` — builds the MCP stdio server and registers 16 tools (`ping`, `execute_query`, `get_database_schema`, `get_schema`, `get_table`, `list_schemas`, `prepare_operation`, `execute_approved_operation`, `explain_query`, `analyze_query_plan`, `diagnose_error`, `get_index_diagnostics`, `list_databases`, `get_active_database`, `switch_database`, `reload_configuration`).
+- Config: `src/config/index.ts` (`loadConfiguration`, `reloadConfiguration`) reads `pg-mind.config.yaml`.
 - Modules under `src/modules/`: `database`, `schema`, `query`, `approval`.
 - Directories `src/mcp/`, `src/ai/`, `src/infrastructure/`, `src/analysis/` **do not exist**. MCP tools are registered in `src/index.ts`.
 - `context.md` does not exist (it is gitignored).
@@ -84,7 +114,7 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 - Prefer simple, focused changes.
 - Avoid unnecessary abstractions and dependencies.
 - Do not introduce Redis, queues, an ORM, a vector database, or additional database engines without an explicit architectural decision.
-- Do not implement planned AI/NL-to-SQL or database-intelligence features unless explicitly requested. These are tracked in `TASKS.md` as not implemented.
+- Do not implement planned AI/NL-to-SQL or database-intelligence features unless explicitly requested.
 - Do not silently change established architecture or security boundaries.
 - Add tests for new behavior, especially SQL classification, validation, approval lifecycle, and execution safety.
 
@@ -95,7 +125,7 @@ The architecture is a **modular TypeScript monolith** — business logic lives i
 - `docs/architecture.md` — internal architecture and execution flows
 - `docs/security.md` — security model, defense-in-depth, and limitations
 - `docs/approval-workflow.md` — approval lifecycle, statuses, and execution
-- `docs/database-setup.md` — PostgreSQL setup and role permissions
+- `docs/database-setup.md` — YAML configuration and PostgreSQL setup
 - `docs/development.md` — development scripts, testing, and test coverage
 - `docs/opencode-integration.md` — OpenCode MCP client integration
 

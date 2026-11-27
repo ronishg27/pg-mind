@@ -1,21 +1,23 @@
-# PGMind Architecture
+# PG-mind Architecture
 
-PGMind is a **modular TypeScript monolith** — a single deployable application with separated concerns. It does not contain its own LLM. The MCP client (e.g., OpenCode) provides the AI agent, while PGMind provides database capabilities and execution safeguards.
+PG-mind is a **modular TypeScript monolith** — a single deployable application with separated concerns. It does not contain its own LLM. The MCP client (e.g., OpenCode) provides the AI agent, while PG-mind provides database capabilities and execution safeguards.
 
 ```
-User → OpenCode LLM → PGMind MCP Server → PGMind Services → PostgreSQL.
+User → OpenCode LLM → PG-mind MCP Server → PG-mind Services → PostgreSQL.
 ```
 
 ## Module Layout
 
 ```
 src/
-├── index.ts                  # MCP server entry point; registers all tools
-├── config/index.ts           # Environment configuration + reloadConfiguration()
+├── index.ts                  # MCP server entry point; registers all 16 tools
+├── config/index.ts           # YAML configuration loading (loadConfiguration, reloadConfiguration)
+├── config/configuration.types.ts   # Zod schemas for config
+├── config/configuration.loader.ts  # YAML load + validation
 ├── modules/
 │   ├── database/             # DatabaseService (read + write pools), ConnectionRegistry (multi-connection, reload)
 │   ├── schema/               # SchemaService (schema introspection)
-│   ├── query/                # SqlValidator, SqlOperationClassifier, WriteSqlValidator, QueryService
+│   ├── query/                # SqlValidator, SqlOperationClassifier, WriteSqlValidator, QueryService, SqlAnalysisService
 │   └── approval/             # ApprovalStore, ApprovalService, ApprovalWorkflowService,
 │                             # ApprovalConfirmationProvider, McpApprovalConfirmationProvider,
 │                             # OperationExecutionService, OperationExecutionWorkflowService
@@ -24,9 +26,21 @@ src/
 
 MCP tools are registered in `src/index.ts`. Business logic lives in the services under `src/modules/`, not inside MCP tool handlers.
 
+## Configuration
+
+PG-mind is configured through **YAML** (`pg-mind.config.yaml`), not environment variables:
+
+- Multiple **named database connections** are supported (up to 20).
+- A **default connection** is configured via `database.default`.
+- Connections can be **switched at runtime** via the `switch_database` MCP tool.
+- Read tools accept an optional `connectionName` to target a specific connection **without** changing the active connection.
+- Read and write pools use the **same configured credentials** for each connection. PG-mind does not enforce separate database roles; PostgreSQL permissions are the primary security boundary.
+
+The server loads `pg-mind.config.yaml` at startup and can reload it at runtime via the `reload_configuration` MCP tool. See `docs/database-setup.md` for the full configuration reference.
+
 ## Two Database Execution Paths
 
-PGMind has two distinct database execution paths:
+PG-mind has two distinct database execution paths:
 
 ### A. Read-only execution path
 
@@ -35,16 +49,14 @@ Used by `execute_query`. Responsibilities:
 - Execute SELECT queries (and read-only WITH/CTE queries).
 - Validate SQL before execution using `SqlValidator`.
 - Reject unsupported and unsafe operations (INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE, etc.).
-- Execute queries through the read-only database connection.
+- Execute queries through the read database connection.
 - Use read-only transactions (`BEGIN READ ONLY`).
-- Apply a 10-second statement timeout.
+- Apply a 10-second statement timeout (configurable).
 - Limit returned rows to 100.
 - Limit result size to 1 MB.
 - Report whether results were truncated (`truncated` flag).
 
-The dedicated PostgreSQL role is `pgmind_readonly`.
-
-**Important:** Database-level read-only permissions are the primary security boundary. Application-level SQL validation alone is not a sufficient security boundary. The read-only role must not have INSERT, UPDATE, DELETE, CREATE, or similar privileges.
+**Important:** Database-level permissions are the primary security boundary. Application-level SQL validation alone is not a sufficient security boundary.
 
 ### B. Approval-gated write execution path
 
@@ -55,17 +67,17 @@ The workflow is:
 1. The user requests a database modification.
 2. The LLM generates SQL.
 3. The LLM calls `prepare_operation`.
-4. PGMind classifies the SQL (`SqlOperationClassifier`).
-5. PGMind creates an approval request (`ApprovalStore`).
+4. PG-mind classifies the SQL (`SqlOperationClassifier`).
+5. PG-mind creates an approval request (`ApprovalStore`).
 6. The MCP elicitation mechanism presents the complete SQL and operation summary to the human (`McpApprovalConfirmationProvider`).
 7. The human explicitly approves, rejects, or cancels.
-8. If approved, PGMind stores the approved request (`approved` status).
+8. If approved, PG-mind stores the approved request (`approved` status).
 9. The LLM can subsequently call `execute_approved_operation` with the approval ID.
-10. PGMind validates the stored SQL again (`WriteSqlValidator`).
-11. PGMind claims the approval request for execution (`approved` → `executing`).
-12. PGMind verifies the writer connection (database + role identity).
-13. PGMind executes the exact stored SQL in a transaction.
-14. PGMind records the final execution status and affected row count.
+10. PG-mind validates the stored SQL again (`WriteSqlValidator`).
+11. PG-mind claims the approval request for execution (`approved` → `executing`).
+12. PG-mind verifies the writer connection (database + role identity).
+13. PG-mind executes the exact stored SQL in a transaction.
+14. PG-mind records the final execution status and affected row count.
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
@@ -73,37 +85,37 @@ The workflow is:
 │ generates   │     │ (classify + store│     │   (human review)│
 │ SQL         │     │  pending approval│     └────────┬────────┘
 └─────────────┘     └──────────────────┘             │ approve
+                                                     ▼
+                                           ┌─────────────────┐
+                                           │  ApprovalStore  │
+                                           │  (approved)     │
+                                           └────────┬────────┘
+                                                    │ execute_approved_operation
                                                     ▼
-                                          ┌─────────────────┐
-                                          │  ApprovalStore  │
-                                          │  (approved)     │
-                                          └────────┬────────┘
-                                                   │ execute_approved_operation
-                                                   ▼
-                                          ┌─────────────────┐
-                                          │WriteSqlValidator│
-                                          │(re-validate SQL)│
-                                          └────────┬────────┘
-                                                   ▼
-                                          ┌─────────────────┐
-                                          │ ApprovalStore   │
-                                          │ (executing claim│
-                                          │  single-use)    │
-                                          └────────┬────────┘
-                                                   ▼
-                                          ┌─────────────────┐
-                                          │DatabaseService  │
-                                          │ withWriteTxn    │
-                                          │ (verify role,   │
-                                          │  10s timeout,   │
-                                          │  COMMIT)        │
-                                          └────────┬────────┘
-                                                   ▼
-                                          ┌─────────────────┐
-                                          │  Status recorded│
-                                          │ (executed/failed│
-                                          │  /execution_unknown)│
-                                          └─────────────────┘
+                                           ┌─────────────────┐
+                                           │WriteSqlValidator│
+                                           │(re-validate SQL)│
+                                           └────────┬────────┘
+                                                    ▼
+                                           ┌─────────────────┐
+                                           │ ApprovalStore   │
+                                           │ (executing claim│
+                                           │  single-use)    │
+                                           └────────┬────────┘
+                                                    ▼
+                                           ┌─────────────────┐
+                                           │DatabaseService  │
+                                           │ withWriteTxn    │
+                                           │ (verify role,   │
+                                           │  10s timeout,   │
+                                           │  COMMIT)        │
+                                           └────────┬────────┘
+                                                    ▼
+                                           ┌─────────────────┐
+                                           │  Status recorded│
+                                           │ (executed/failed│
+                                           │  /execution_unknown)│
+                                           └─────────────────┘
 ```
 
 Key constraints:
@@ -112,23 +124,17 @@ Key constraints:
 - The LLM must not be able to approve its own operations through a separate model-callable approval tool. Human approval happens through the MCP confirmation/elicitation provider only.
 - Approval does **not** execute SQL. `prepare_operation` only stores a pending approval request.
 
-## Database Connections
+## Database connections
 
-`DatabaseService` manages two connection pools:
+`DatabaseService` manages a read pool and (optionally) a write pool for each configured connection. Both pools use the **same configured credentials**. The write pool is optional — if no write credentials are provided for a connection, write operations against that connection fail.
 
-| Pool | Env var | Required? | Role | Purpose |
-|------|---------|-----------|------|---------|
-| Read pool | `QUERY_DATABASE_URL` | Yes | `pgmind_readonly` | Schema discovery, read-only queries, metadata |
-| Write pool | `WRITE_DATABASE_URL` | No | `writeRoleName` (default `pgmind_writer`) | Execute approved write operations |
-
-The write pool is optional. If `WRITE_DATABASE_URL` is not configured, `DatabaseService` is created without a write pool, and any attempt to execute a write operation fails with `"Write pool is not configured"`.
-
-The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults to `pgmind_writer`. The writer connection identity is verified at runtime in `withWriteTransaction`, so the configured role name must match the actual PostgreSQL role used by `WRITE_DATABASE_URL`.
+The expected database and username are verified at runtime in `withWriteTransaction`, so the configured credentials must match the actual PostgreSQL role used.
 
 ### Read transaction (`withReadOnlyTransaction`)
 
 - `BEGIN READ ONLY`
-- `SET LOCAL statement_timeout = '10s'`
+- `SET LOCAL statement_timeout = '10s'` (configurable)
+- `SET LOCAL lock_timeout` and `idle_in_transaction_session_timeout`
 - Execute callback
 - `COMMIT` on success, `ROLLBACK` on error
 - Connection always released in `finally`
@@ -137,20 +143,20 @@ The expected writer role name is configured via `WRITE_ROLE_NAME` and defaults t
 
 - Requires the write pool; throws `"Write pool is not configured"` if absent.
 - `BEGIN`
-- Verify connection identity: `current_database()` must equal the expected database (from the approval request), and `current_user` must equal the configured writer role (`writeRoleName`, default `pgmind_writer`, overridable via `WRITE_ROLE_NAME`). A mismatch aborts the operation.
-- `SET LOCAL statement_timeout = '10s'`
+- Verify connection identity: `current_database()` must equal the expected database, and `current_user` must equal the configured username. A mismatch aborts the operation.
+- `SET LOCAL statement_timeout = '10s'` (configurable)
 - Execute callback (the exact stored SQL)
 - `COMMIT` — from this point onward a failed COMMIT has an **uncertain outcome**. If COMMIT fails, a `CommitOutcomeUnknownError` is thrown rather than assuming rollback.
 - `ROLLBACK` on error (before COMMIT attempt). If ROLLBACK also fails, the connection client is discarded from the pool rather than returned for reuse, preventing an uncertain connection from being recycled. The original operation error is preserved and rethrown.
 - Connection released in `finally`; `client.release(releaseError)` is used so a commit or rollback error causes the client to be removed from the pool.
 
-## Commit Outcome Handling
+## Commit outcome handling
 
-`CommitOutcomeUnknownError` is thrown when the COMMIT request fails. A failed COMMIT does **not** necessarily mean the transaction was rolled back — the database may already have committed it. The connection client is discarded from the pool rather than returned for reuse. PGMind therefore marks the execution as `execution_unknown` rather than assuming failure or retrying automatically. An unknown commit outcome means the operation may or may not have been applied. Manual database-state verification is required before any new attempt, and retrying blindly could cause duplicate effects.
+`CommitOutcomeUnknownError` is thrown when the COMMIT request fails. A failed COMMIT does **not** necessarily mean the transaction was rolled back — the database may already have committed it. The connection client is discarded from the pool rather than returned for reuse. PG-mind therefore marks the execution as `execution_unknown` rather than assuming failure or retrying automatically. An unknown commit outcome means the operation may or may not have been applied. Manual database-state verification is required before any new attempt, and retrying blindly could cause duplicate effects.
 
-## SQL Validation and Classification
+## SQL validation and classification
 
-PGMind separates SQL validation and classification into distinct components:
+PG-mind separates SQL validation and classification into distinct components:
 
 - **`SqlValidator`** — protects the read-only execution path. Allows only SELECT and WITH statements; rejects disallowed statement types, disallowed functions, SELECT FOR UPDATE/SHARE, and SELECT INTO. Exactly one statement required. Max 50,000 characters.
 - **`SqlOperationClassifier`** — classifies SQL into operations (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE, OTHER) and categories (read, write, unknown), with an `requiresApproval` flag. Handles direct statements, WITH statements, data-modifying CTEs, and nested CTEs. Rejects multiple statements, invalid syntax, and unsupported SQL (e.g., EXPLAIN).
@@ -158,7 +164,7 @@ PGMind separates SQL validation and classification into distinct components:
 
 Separate validators exist because the read-only and write paths have different security requirements. Merging them into one permissive validator would weaken the read-only path's guarantees.
 
-## Approval Storage
+## Approval storage
 
 `ApprovalStore` uses an in-memory `Map`:
 
@@ -172,15 +178,19 @@ Separate validators exist because the read-only and write paths have different s
 
 **Limitation:** Approval requests disappear when the server restarts. In-memory storage is not durable.
 
-## MCP Tools
+## MCP tools
 
-Twelve tools are registered in `src/index.ts`:
+Sixteen tools are registered in `src/index.ts`:
 
 | Tool | Input | Output | Modifies DB? |
-|------|-------|--------|--------------|
-| `ping` | `{ message?: string }` | Text: `"PGMind is running. Pong!"` or echo | No |
+|---|---|---|---|
+| `ping` | `{ message?: string }` | Text: server status | No |
 | `execute_query` | `{ sql: string }` (1–50,000 chars) | JSON `QueryResult` (columns, rows, rowCount, truncated) | No |
-| `get_database_schema` | `{ schemaNames?, tableNames?, includeViews?, includeMaterializedViews?, includeSequences?, includeFunctions?, includeIndexes?, includeConstraints? }` | JSON schema (schemas, tables, columns, constraints) | No |
+| `list_databases` | `{}` | JSON `{ databases: [...] }` — connection name, database, host, port, isDefault, isActive | No |
+| `get_active_database` | `{}` | JSON active connection metadata | No |
+| `switch_database` | `{ connectionName: string }` | JSON selected connection metadata | No |
+| `reload_configuration` | `{}` | JSON `{ added, removed, modified, unchanged, activeConnectionName, defaultConnectionName, activeConnectionChanged }` | No |
+| `get_database_schema` | `{ schemaNames?, tableNames?, includeViews?, ... }` | JSON schema (schemas, tables, columns, constraints) | No |
 | `get_schema` | `{ schemaName: string }` | JSON `SchemaMetadata` | No |
 | `get_table` | `{ schemaName: string, tableName: string }` | JSON `TableMetadata` | No |
 | `list_schemas` | `{}` | JSON `{ schemas: string[] }` | No |
@@ -190,13 +200,12 @@ Twelve tools are registered in `src/index.ts`:
 | `get_index_diagnostics` | `{ schemaName: string, tableName: string }` | JSON `IndexDiagnosticsResult` (indexes, suggestions) | No |
 | `prepare_operation` | `{ sql: string, connectionName?: string }` (1–50,000 chars) | JSON `{ id, status, message }` | No (stores approval only) |
 | `execute_approved_operation` | `{ approvalId: uuid }` | JSON `{ approvalId, operation, database, affectedRows, status, message }` | Yes |
-| `reload_configuration` | `{}` | JSON `{ added, removed, modified, unchanged, activeConnectionName, defaultConnectionName, activeConnectionChanged }` | No |
 
 All tools catch errors and return MCP `isError` responses with the error message.
 
-## Runtime Configuration Reload (`reload_configuration`)
+## Runtime configuration reload (`reload_configuration`)
 
-PGMind supports reloading `pg-mind.config.yaml` at runtime without restarting the server. This is done through the `reload_configuration` MCP tool.
+PG-mind supports reloading `pg-mind.config.yaml` at runtime without restarting the server. This is done through the `reload_configuration` MCP tool.
 
 ### Reload behavior
 
@@ -244,3 +253,5 @@ Existing approvals retain their original `connectionName`, `database`, and `conn
 - **Re-added connection with the same name:** Treated as a new connection instance — its generation is incremented, so old approvals prepared against the previous instance cannot execute against it.
 
 No credentials are stored in approval records.
+
+**Configuration reload never redirects existing approvals to replacement or different connections.**
