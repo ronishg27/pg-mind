@@ -1,19 +1,11 @@
-import { SqlAnalysisService, type SqlAnalysis } from "./sql-analysis.service.js";
+import { SqlAnalysisService, type SqlAnalysis } from './sql-analysis.service.js';
 
 export type SqlOperation =
-    | "SELECT"
-    | "INSERT"
-    | "UPDATE"
-    | "DELETE"
-    | "CREATE"
-    | "ALTER"
-    | "DROP"
-    | "TRUNCATE"
-    | "OTHER";
+    'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'CREATE' | 'ALTER' | 'DROP' | 'TRUNCATE' | 'OTHER';
 
 export interface SqlClassification {
     operation: SqlOperation;
-    category: "read" | "write" | "unknown";
+    category: 'read' | 'write' | 'unknown';
     requiresApproval: boolean;
 }
 

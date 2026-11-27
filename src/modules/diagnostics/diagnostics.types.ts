@@ -5,7 +5,7 @@ export interface ExplainOptions {
     buffers?: boolean;
     timing?: boolean;
     summary?: boolean;
-    format?: "text" | "json" | "xml" | "yaml";
+    format?: 'text' | 'json' | 'xml' | 'yaml';
 }
 
 export interface ExplainResult {
@@ -15,46 +15,46 @@ export interface ExplainResult {
 }
 
 export interface ExplainPlanNode {
-    "Node Type": string;
-    "Startup Cost"?: number;
-    "Total Cost"?: number;
-    "Plan Rows"?: number;
-    "Plan Width"?: number;
-    "Actual Startup Time"?: number;
-    "Actual Total Time"?: number;
-    "Actual Rows"?: number;
-    "Actual Loops"?: number;
-    "Shared Hit Blocks"?: number;
-    "Shared Read Blocks"?: number;
-    "Shared Dirtied Blocks"?: number;
-    "Shared Written Blocks"?: number;
-    "Local Hit Blocks"?: number;
-    "Local Read Blocks"?: number;
-    "Local Dirtied Blocks"?: number;
-    "Local Written Blocks"?: number;
-    "Temp Read Blocks"?: number;
-    "Temp Written Blocks"?: number;
-    "Workers Planned"?: number;
-    "Workers Launched"?: number;
-    "Worker Number"?: number;
-    "Parallel Aware"?: boolean;
-    "Relation Name"?: string;
-    "Schema"?: string;
-    "Alias"?: string;
-    "Index Name"?: string;
-    "Index Cond"?: string;
-    "Filter"?: string;
-    "Rows Removed by Filter"?: number;
-    "Join Type"?: string;
-    "Join Filter"?: string;
-    "Hash Cond"?: string;
-    "Merge Cond"?: string;
-    "Sort Key"?: string[];
-    "Sort Method"?: string;
-    "Sort Space Used"?: number;
-    "Sort Space Type"?: string;
-    "Subplans"?: ExplainPlanNode[];
-    "Plans"?: ExplainPlanNode[];
+    'Node Type': string;
+    'Startup Cost'?: number;
+    'Total Cost'?: number;
+    'Plan Rows'?: number;
+    'Plan Width'?: number;
+    'Actual Startup Time'?: number;
+    'Actual Total Time'?: number;
+    'Actual Rows'?: number;
+    'Actual Loops'?: number;
+    'Shared Hit Blocks'?: number;
+    'Shared Read Blocks'?: number;
+    'Shared Dirtied Blocks'?: number;
+    'Shared Written Blocks'?: number;
+    'Local Hit Blocks'?: number;
+    'Local Read Blocks'?: number;
+    'Local Dirtied Blocks'?: number;
+    'Local Written Blocks'?: number;
+    'Temp Read Blocks'?: number;
+    'Temp Written Blocks'?: number;
+    'Workers Planned'?: number;
+    'Workers Launched'?: number;
+    'Worker Number'?: number;
+    'Parallel Aware'?: boolean;
+    'Relation Name'?: string;
+    Schema?: string;
+    Alias?: string;
+    'Index Name'?: string;
+    'Index Cond'?: string;
+    Filter?: string;
+    'Rows Removed by Filter'?: number;
+    'Join Type'?: string;
+    'Join Filter'?: string;
+    'Hash Cond'?: string;
+    'Merge Cond'?: string;
+    'Sort Key'?: string[];
+    'Sort Method'?: string;
+    'Sort Space Used'?: number;
+    'Sort Space Type'?: string;
+    Subplans?: ExplainPlanNode[];
+    Plans?: ExplainPlanNode[];
     [key: string]: unknown;
 }
 
@@ -86,7 +86,7 @@ export interface ErrorDiagnosis {
 }
 
 export interface AffectedObject {
-    type: "table" | "index" | "constraint" | "column" | "function" | "schema";
+    type: 'table' | 'index' | 'constraint' | 'column' | 'function' | 'schema';
     schema: string;
     name: string;
     details?: string;
@@ -115,10 +115,10 @@ export interface IndexDiagnosticsInfo {
 }
 
 export interface IndexSuggestion {
-    type: "missing_index" | "unused_index" | "duplicate_index" | "partial_index";
+    type: 'missing_index' | 'unused_index' | 'duplicate_index' | 'partial_index';
     description: string;
     sql?: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
 }
 
 export interface QueryPlanAnalysis {
@@ -128,8 +128,14 @@ export interface QueryPlanAnalysis {
 }
 
 export interface QueryPlanIssue {
-    type: "seq_scan" | "nested_loop" | "sort_spill" | "high_cost" | "row_estimate_error" | "missing_stats";
-    severity: "high" | "medium" | "low";
+    type:
+        | 'seq_scan'
+        | 'nested_loop'
+        | 'sort_spill'
+        | 'high_cost'
+        | 'row_estimate_error'
+        | 'missing_stats';
+    severity: 'high' | 'medium' | 'low';
     node: ExplainPlanNode;
     description: string;
     recommendation: string;

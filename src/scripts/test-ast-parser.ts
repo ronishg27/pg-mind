@@ -1,8 +1,8 @@
-import { parse } from "pgsql-ast-parser";
+import { parse } from 'pgsql-ast-parser';
 
-console.dir(parse("WITH x AS (SELECT 1) SELECT * FROM x"), { depth: null });
+console.dir(parse('WITH x AS (SELECT 1) SELECT * FROM x'), { depth: null });
 
-console.dir(parse("WITH x AS (SELECT 1) DELETE FROM users"), { depth: null });
+console.dir(parse('WITH x AS (SELECT 1) DELETE FROM users'), { depth: null });
 
 console.dir(
     parse(`
@@ -12,5 +12,5 @@ console.dir(
         )
         SELECT * FROM deleted
     `),
-    { depth: null },
+    { depth: null }
 );

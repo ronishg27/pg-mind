@@ -1,4 +1,4 @@
-import { DatabaseService } from "../database/database.service.js";
+import { DatabaseService } from '../database/database.service.js';
 
 import type {
     DatabaseSchema,
@@ -14,7 +14,7 @@ import type {
     FunctionArgumentMetadata,
     ViewColumnMetadata,
     IndexColumnMetadata,
-} from "./schema.types.js";
+} from './schema.types.js';
 
 interface SchemaRow {
     schema_name: string;
@@ -23,20 +23,20 @@ interface SchemaRow {
 interface TableRow {
     table_schema: string;
     table_name: string;
-    table_type: "BASE TABLE" | "VIEW" | "MATERIALIZED VIEW" | "FOREIGN TABLE";
+    table_type: 'BASE TABLE' | 'VIEW' | 'MATERIALIZED VIEW' | 'FOREIGN TABLE';
 }
 
 interface ColumnRow {
     table_schema: string;
     table_name: string;
-    table_type: "BASE TABLE" | "VIEW" | "MATERIALIZED VIEW" | "FOREIGN TABLE";
+    table_type: 'BASE TABLE' | 'VIEW' | 'MATERIALIZED VIEW' | 'FOREIGN TABLE';
     column_name: string;
     data_type: string;
     is_nullable: boolean;
     column_default: string | null;
     ordinal_position: number;
     is_identity: boolean;
-    identity_generation: "ALWAYS" | "BY DEFAULT" | null;
+    identity_generation: 'ALWAYS' | 'BY DEFAULT' | null;
     is_generated: string | null;
     generation_expression: string | null;
     col_description: string | null;
@@ -46,7 +46,7 @@ interface ConstraintRow {
     constraint_name: string;
     table_schema: string;
     table_name: string;
-    constraint_type: "PRIMARY KEY" | "FOREIGN KEY" | "UNIQUE" | "CHECK" | "EXCLUSION";
+    constraint_type: 'PRIMARY KEY' | 'FOREIGN KEY' | 'UNIQUE' | 'CHECK' | 'EXCLUSION';
     column_name: string;
     ordinal_position: number;
     referenced_table_schema: string | null;
@@ -68,8 +68,8 @@ interface IndexRow {
     method: string;
     column_name: string;
     ordinal_position: number;
-    sort_direction: "ASC" | "DESC" | "DEFAULT";
-    nulls_order: "FIRST" | "LAST" | "DEFAULT";
+    sort_direction: 'ASC' | 'DESC' | 'DEFAULT';
+    nulls_order: 'FIRST' | 'LAST' | 'DEFAULT';
     where_clause: string | null;
     definition: string;
 }
@@ -110,13 +110,13 @@ interface FunctionRow {
     function_name: string;
     language: string;
     return_type: string;
-    volatility: "VOLATILE" | "STABLE" | "IMMUTABLE";
+    volatility: 'VOLATILE' | 'STABLE' | 'IMMUTABLE';
     is_strict: boolean;
     is_security_definer: boolean;
     definition: string | null;
     argument_name: string;
     argument_data_type: string;
-    argument_mode: "IN" | "OUT" | "INOUT" | "VARIADIC";
+    argument_mode: 'IN' | 'OUT' | 'INOUT' | 'VARIADIC';
     arguments_full: string | null;
 }
 
@@ -145,16 +145,16 @@ export class SchemaService {
         } = options || {};
 
         const schemaFilter = schemaNames?.length
-            ? `AND n.nspname IN (${schemaNames.map((_, i) => `$${i + 1}`).join(",")})`
+            ? `AND n.nspname IN (${schemaNames.map((_, i) => `$${i + 1}`).join(',')})`
             : `AND n.nspname NOT IN ('information_schema', 'pg_catalog') AND n.nspname NOT LIKE 'pg_toast%'`;
 
         const tableFilter = tableNames?.length
-            ? `AND c.relname IN (${tableNames.map((_, i) => `$${(schemaNames?.length || 0) + i + 1}`).join(",")})`
-            : "";
+            ? `AND c.relname IN (${tableNames.map((_, i) => `$${(schemaNames?.length || 0) + i + 1}`).join(',')})`
+            : '';
 
         const indexTableFilter = tableNames?.length
-            ? `AND tc.relname IN (${tableNames.map((_, i) => `$${(schemaNames?.length || 0) + i + 1}`).join(",")})`
-            : "";
+            ? `AND tc.relname IN (${tableNames.map((_, i) => `$${(schemaNames?.length || 0) + i + 1}`).join(',')})`
+            : '';
 
         // Build parameter arrays
         const params: (string | number)[] = [];
@@ -197,7 +197,8 @@ export class SchemaService {
         `;
 
         // Batch query 2: All constraints (PK, FK, UNIQUE, CHECK, EXCLUSION)
-        const constraintsQuery = includeConstraints ? `
+        const constraintsQuery = includeConstraints
+            ? `
             SELECT
                 con.conname AS constraint_name,
                 n.nspname AS table_schema,
@@ -237,10 +238,12 @@ export class SchemaService {
                 ${schemaFilter}
                 ${tableFilter}
             ORDER BY n.nspname, c.relname, con.conname, k.ordinality
-        ` : "";
+        `
+            : '';
 
         // Batch query 3: All indexes
-        const indexesQuery = includeIndexes ? `
+        const indexesQuery = includeIndexes
+            ? `
             SELECT
                 n.nspname AS index_schema,
                 i.relname AS index_name,
@@ -273,10 +276,12 @@ export class SchemaService {
                 ${schemaFilter}
                 ${indexTableFilter}
             ORDER BY tn.nspname, tc.relname, i.relname, ordinal_position
-        ` : "";
+        `
+            : '';
 
         // Batch query 4: Views
-        const viewsQuery = includeViews ? `
+        const viewsQuery = includeViews
+            ? `
             SELECT
                 n.nspname AS table_schema,
                 c.relname AS table_name,
@@ -295,10 +300,12 @@ export class SchemaService {
                 ${schemaFilter}
                 ${tableFilter}
             ORDER BY n.nspname, c.relname, a.attnum
-        ` : "";
+        `
+            : '';
 
         // Batch query 5: Materialized views
-        const matViewsQuery = includeMaterializedViews ? `
+        const matViewsQuery = includeMaterializedViews
+            ? `
             SELECT
                 n.nspname AS table_schema,
                 c.relname AS table_name,
@@ -318,10 +325,12 @@ export class SchemaService {
                 ${schemaFilter}
                 ${tableFilter}
             ORDER BY n.nspname, c.relname, a.attnum
-        ` : "";
+        `
+            : '';
 
         // Batch query 6: Sequences
-        const sequencesQuery = includeSequences ? `
+        const sequencesQuery = includeSequences
+            ? `
             SELECT
                 n.nspname AS sequence_schema,
                 c.relname AS sequence_name,
@@ -340,10 +349,12 @@ export class SchemaService {
                 AND n.nspname NOT LIKE 'pg_toast%'
                 ${schemaFilter}
             ORDER BY n.nspname, c.relname
-        ` : "";
+        `
+            : '';
 
         // Batch query 7: Functions
-        const functionsQuery = includeFunctions ? `
+        const functionsQuery = includeFunctions
+            ? `
             SELECT
                 n.nspname AS schema_name,
                 p.proname AS function_name,
@@ -365,7 +376,8 @@ export class SchemaService {
                 AND p.prokind = 'f'
                 ${schemaFilter}
             ORDER BY n.nspname, p.proname
-        ` : "";
+        `
+            : '';
 
         // Execute all queries in parallel
         const [
@@ -378,12 +390,22 @@ export class SchemaService {
             functionsResult,
         ] = await Promise.all([
             this.database.query<ColumnRow>(tablesQuery, params),
-            includeConstraints ? this.database.query<ConstraintRow>(constraintsQuery, params) : Promise.resolve([]),
-            includeIndexes ? this.database.query<IndexRow>(indexesQuery, params) : Promise.resolve([]),
+            includeConstraints
+                ? this.database.query<ConstraintRow>(constraintsQuery, params)
+                : Promise.resolve([]),
+            includeIndexes
+                ? this.database.query<IndexRow>(indexesQuery, params)
+                : Promise.resolve([]),
             includeViews ? this.database.query<ViewRow>(viewsQuery, params) : Promise.resolve([]),
-            includeMaterializedViews ? this.database.query<MatViewRow>(matViewsQuery, params) : Promise.resolve([]),
-            includeSequences ? this.database.query<SequenceRow>(sequencesQuery, params) : Promise.resolve([]),
-            includeFunctions ? this.database.query<FunctionRow>(functionsQuery, params) : Promise.resolve([]),
+            includeMaterializedViews
+                ? this.database.query<MatViewRow>(matViewsQuery, params)
+                : Promise.resolve([]),
+            includeSequences
+                ? this.database.query<SequenceRow>(sequencesQuery, params)
+                : Promise.resolve([]),
+            includeFunctions
+                ? this.database.query<FunctionRow>(functionsQuery, params)
+                : Promise.resolve([]),
         ]);
 
         // Group results by schema
@@ -609,7 +631,7 @@ export class SchemaService {
                 func.arguments.push({
                     name: row.argument_name,
                     dataType: row.argument_data_type,
-                    mode: row.argument_mode || "IN",
+                    mode: row.argument_mode || 'IN',
                     defaultExpression: null, // pg_get_function_arguments would need separate parsing
                     ordinalPosition: func.arguments.length + 1,
                 });
@@ -622,7 +644,9 @@ export class SchemaService {
         }
 
         // Sort and return
-        const sortedSchemas = Array.from(schemaMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        const sortedSchemas = Array.from(schemaMap.values()).sort((a, b) =>
+            a.name.localeCompare(b.name)
+        );
 
         for (const schema of sortedSchemas) {
             schema.tables.sort((a, b) => a.name.localeCompare(b.name));

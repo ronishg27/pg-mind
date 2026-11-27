@@ -1,31 +1,31 @@
-import * as fs from "fs";
-import * as path from "path";
-import * as yaml from "js-yaml";
-import { z } from "zod";
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
+import { z } from 'zod';
 import {
     ConfigFileSchema,
     DatabaseConfig,
     ConnectionConfig,
     ResolvedConnectionConfig,
     PoolConfig,
-} from "./configuration.types.js";
+} from './configuration.types.js';
 
 export { ConfigFileSchema };
 
-const CONFIG_FILENAME = "pg-mind.config.yaml";
-const EXAMPLE_CONFIG_FILENAME = "pg-mind.config.example.yaml";
+const CONFIG_FILENAME = 'pg-mind.config.yaml';
+const EXAMPLE_CONFIG_FILENAME = 'pg-mind.config.example.yaml';
 
 /**
  * Default configuration file locations in order of priority.
  */
-const CONFIG_SEARCH_PATHS = [process.cwd(), path.join(process.cwd(), "config")];
+const CONFIG_SEARCH_PATHS = [process.cwd(), path.join(process.cwd(), 'config')];
 
 /**
  * Build a PostgreSQL connection string from connection config.
  * Password is included in the connection string but never logged.
  */
 function buildConnectionString(config: ConnectionConfig): string {
-    const sslParam = config.ssl ? "?sslmode=require" : "";
+    const sslParam = config.ssl ? '?sslmode=require' : '';
     return `postgresql://${encodeURIComponent(config.username)}:${encodeURIComponent(config.password)}@${config.host}:${config.port}/${config.database}${sslParam}`;
 }
 
@@ -45,7 +45,7 @@ const DEFAULT_POOL_CONFIG: PoolConfig = {
 function resolveConnectionConfig(
     name: string,
     connection: ConnectionConfig,
-    databaseConfig: DatabaseConfig,
+    databaseConfig: DatabaseConfig
 ): ResolvedConnectionConfig {
     const pool = databaseConfig.pool ?? DEFAULT_POOL_CONFIG;
     return {
@@ -79,17 +79,17 @@ export function loadConfiguration(): DatabaseConfig {
         throw new Error(
             `Configuration file not found: ${CONFIG_FILENAME}\n` +
                 `Create ${CONFIG_FILENAME} in the project root with your database connections.\n` +
-                `See ${EXAMPLE_CONFIG_FILENAME} for a template.`,
+                `See ${EXAMPLE_CONFIG_FILENAME} for a template.`
         );
     }
 
     let fileContent: string;
     try {
-        fileContent = fs.readFileSync(configPath, "utf-8");
+        fileContent = fs.readFileSync(configPath, 'utf-8');
     } catch (error) {
         throw new Error(
             `Failed to read configuration file: ${configPath}\n` +
-                `${error instanceof Error ? error.message : String(error)}`,
+                `${error instanceof Error ? error.message : String(error)}`
         );
     }
 
@@ -99,7 +99,7 @@ export function loadConfiguration(): DatabaseConfig {
     } catch (error) {
         throw new Error(
             `Failed to parse YAML configuration: ${configPath}\n` +
-                `${error instanceof Error ? error.message : String(error)}`,
+                `${error instanceof Error ? error.message : String(error)}`
         );
     }
 
@@ -107,8 +107,8 @@ export function loadConfiguration(): DatabaseConfig {
 
     if (!result.success) {
         const errors = result.error.issues
-            .map((e) => `${e.path.map(String).join(".")}: ${e.message}`)
-            .join("\n");
+            .map((e) => `${e.path.map(String).join('.')}: ${e.message}`)
+            .join('\n');
         throw new Error(`Configuration validation failed:\n${errors}`);
     }
 
@@ -116,10 +116,10 @@ export function loadConfiguration(): DatabaseConfig {
 
     // Validate that default connection exists
     if (!config.connections[config.default]) {
-        const available = Object.keys(config.connections).join(", ") || "none";
+        const available = Object.keys(config.connections).join(', ') || 'none';
         throw new Error(
             `Default connection '${config.default}' not found in connections.\n` +
-                `Available connections: ${available}`,
+                `Available connections: ${available}`
         );
     }
 
@@ -128,7 +128,7 @@ export function loadConfiguration(): DatabaseConfig {
     const uniqueNames = new Set(names);
     if (names.length !== uniqueNames.size) {
         throw new Error(
-            "Duplicate connection names found. Each connection must have a unique name.",
+            'Duplicate connection names found. Each connection must have a unique name.'
         );
     }
 
@@ -139,7 +139,7 @@ export function loadConfiguration(): DatabaseConfig {
         if (config.pool.maxTotal < minTotal) {
             throw new Error(
                 `Pool maxTotal (${config.pool.maxTotal}) must be at least ${minTotal} ` +
-                    `(${config.pool.max} per pool * 2 pools * ${names.length} connections)`,
+                    `(${config.pool.max} per pool * 2 pools * ${names.length} connections)`
             );
         }
     }
@@ -165,15 +165,13 @@ function findConfigFile(): string | null {
  */
 export function getResolvedConnectionConfig(
     databaseConfig: DatabaseConfig,
-    connectionName: string,
+    connectionName: string
 ): ResolvedConnectionConfig {
     const connection = databaseConfig.connections[connectionName];
     if (!connection) {
-        const available =
-            Object.keys(databaseConfig.connections).join(", ") || "none";
+        const available = Object.keys(databaseConfig.connections).join(', ') || 'none';
         throw new Error(
-            `Connection '${connectionName}' not found.\n` +
-                `Available connections: ${available}`,
+            `Connection '${connectionName}' not found.\n` + `Available connections: ${available}`
         );
     }
     return resolveConnectionConfig(connectionName, connection, databaseConfig);
@@ -183,16 +181,11 @@ export function getResolvedConnectionConfig(
  * Get all resolved connection configurations.
  */
 export function getAllResolvedConnectionConfigs(
-    databaseConfig: DatabaseConfig,
+    databaseConfig: DatabaseConfig
 ): Map<string, ResolvedConnectionConfig> {
     const configs = new Map<string, ResolvedConnectionConfig>();
-    for (const [name, connection] of Object.entries(
-        databaseConfig.connections,
-    )) {
-        configs.set(
-            name,
-            resolveConnectionConfig(name, connection, databaseConfig),
-        );
+    for (const [name, connection] of Object.entries(databaseConfig.connections)) {
+        configs.set(name, resolveConnectionConfig(name, connection, databaseConfig));
     }
     return configs;
 }
@@ -201,7 +194,7 @@ export function getAllResolvedConnectionConfigs(
  * Get the default resolved connection configuration.
  */
 export function getDefaultResolvedConnectionConfig(
-    databaseConfig: DatabaseConfig,
+    databaseConfig: DatabaseConfig
 ): ResolvedConnectionConfig {
     return getResolvedConnectionConfig(databaseConfig, databaseConfig.default);
 }
@@ -212,7 +205,7 @@ export function getDefaultResolvedConnectionConfig(
 export function getConnectionMetadata(
     databaseConfig: DatabaseConfig,
     connectionName: string,
-    version: number = 1,
+    version: number = 1
 ): {
     id: string;
     name: string;
@@ -223,9 +216,7 @@ export function getConnectionMetadata(
     ssl: boolean;
     version: number;
 } {
-    const connection = databaseConfig.connections[
-        connectionName
-    ] as ConnectionConfig;
+    const connection = databaseConfig.connections[connectionName] as ConnectionConfig;
     if (!connection) {
         throw new Error(`Connection '${connectionName}' not found`);
     }
@@ -233,7 +224,7 @@ export function getConnectionMetadata(
     // Generate deterministic ID from name and host/database
     const id = `${connectionName}-${connection.host}-${connection.database}`
         .toLowerCase()
-        .replace(/[^a-z0-9-]/g, "-");
+        .replace(/[^a-z0-9-]/g, '-');
 
     return {
         id,

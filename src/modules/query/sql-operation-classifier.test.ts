@@ -1,30 +1,28 @@
-import { describe, expect, it } from "vitest";
-import { SqlOperationClassifier } from "./sql-operation-classifier.js";
+import { describe, expect, it } from 'vitest';
+import { SqlOperationClassifier } from './sql-operation-classifier.js';
 
-describe("SqlOperationClassifier", () => {
+describe('SqlOperationClassifier', () => {
     const classifier = new SqlOperationClassifier();
 
-    describe("Read operations", () => {
-        it("should classify SELECT as read", () => {
-            const result = classifier.classify("SELECT * FROM users");
+    describe('Read operations', () => {
+        it('should classify SELECT as read', () => {
+            const result = classifier.classify('SELECT * FROM users');
 
             expect(result).toEqual({
-                operation: "SELECT",
-                category: "read",
+                operation: 'SELECT',
+                category: 'read',
                 requiresApproval: false,
             });
         });
 
-        it("should classify WITH SELECT as read", () => {
-            const result = classifier.classify(
-                "WITH x AS (SELECT 1) SELECT * FROM x",
-            );
+        it('should classify WITH SELECT as read', () => {
+            const result = classifier.classify('WITH x AS (SELECT 1) SELECT * FROM x');
 
-            expect(result.category).toBe("read");
-            expect(result.operation).toBe("SELECT");
+            expect(result.category).toBe('read');
+            expect(result.operation).toBe('SELECT');
         });
 
-        it("should classify multiple read-only CTEs as read", () => {
+        it('should classify multiple read-only CTEs as read', () => {
             const result = classifier.classify(`
         WITH
             first_cte AS (
@@ -37,47 +35,45 @@ describe("SqlOperationClassifier", () => {
     `);
 
             expect(result).toEqual({
-                operation: "SELECT",
-                category: "read",
+                operation: 'SELECT',
+                category: 'read',
                 requiresApproval: false,
             });
         });
     });
 
-    describe("Write operations", () => {
+    describe('Write operations', () => {
         const cases = [
-            ["INSERT", "INSERT INTO users (name) VALUES ('Ron')"],
-            ["UPDATE", "UPDATE users SET name = 'Ron'"],
-            ["DELETE", "DELETE FROM users"],
-            ["CREATE", "CREATE TABLE users (id INT)"],
-            ["ALTER", "ALTER TABLE users ADD COLUMN age INT"],
-            ["DROP", "DROP TABLE users"],
-            ["TRUNCATE", "TRUNCATE TABLE users"],
-            ["CREATE", "CREATE INDEX idx_users_email ON users(email)"],
-            ["DROP", "DROP INDEX idx_users_email"],
+            ['INSERT', "INSERT INTO users (name) VALUES ('Ron')"],
+            ['UPDATE', "UPDATE users SET name = 'Ron'"],
+            ['DELETE', 'DELETE FROM users'],
+            ['CREATE', 'CREATE TABLE users (id INT)'],
+            ['ALTER', 'ALTER TABLE users ADD COLUMN age INT'],
+            ['DROP', 'DROP TABLE users'],
+            ['TRUNCATE', 'TRUNCATE TABLE users'],
+            ['CREATE', 'CREATE INDEX idx_users_email ON users(email)'],
+            ['DROP', 'DROP INDEX idx_users_email'],
         ] as const;
 
-        it.each(cases)("should classify %s as write", (operation, sql) => {
+        it.each(cases)('should classify %s as write', (operation, sql) => {
             const result = classifier.classify(sql);
 
             expect(result).toEqual({
                 operation,
-                category: "write",
+                category: 'write',
                 requiresApproval: true,
             });
         });
 
-        it("should classify WITH DELETE as write", () => {
-            const result = classifier.classify(
-                "WITH x AS (SELECT 1) DELETE FROM users",
-            );
+        it('should classify WITH DELETE as write', () => {
+            const result = classifier.classify('WITH x AS (SELECT 1) DELETE FROM users');
 
-            expect(result.operation).toBe("DELETE");
-            expect(result.category).toBe("write");
+            expect(result.operation).toBe('DELETE');
+            expect(result.category).toBe('write');
             expect(result.requiresApproval).toBe(true);
         });
 
-        it("should detect DELETE inside a CTE", () => {
+        it('should detect DELETE inside a CTE', () => {
             const result = classifier.classify(`
                 WITH deleted AS (
                     DELETE FROM users
@@ -86,12 +82,12 @@ describe("SqlOperationClassifier", () => {
                 SELECT * FROM deleted
             `);
 
-            expect(result.operation).toBe("DELETE");
-            expect(result.category).toBe("write");
+            expect(result.operation).toBe('DELETE');
+            expect(result.category).toBe('write');
             expect(result.requiresApproval).toBe(true);
         });
 
-        it("should detect write operations in multiple CTEs", () => {
+        it('should detect write operations in multiple CTEs', () => {
             const result = classifier.classify(`
         WITH
             first_cte AS (
@@ -106,13 +102,13 @@ describe("SqlOperationClassifier", () => {
     `);
 
             expect(result).toEqual({
-                operation: "DELETE",
-                category: "write",
+                operation: 'DELETE',
+                category: 'write',
                 requiresApproval: true,
             });
         });
 
-        it("should detect write operations in nested CTEs", () => {
+        it('should detect write operations in nested CTEs', () => {
             const result = classifier.classify(`
         WITH outer_cte AS (
             WITH inner_cte AS (
@@ -125,58 +121,58 @@ describe("SqlOperationClassifier", () => {
     `);
 
             expect(result).toEqual({
-                operation: "DELETE",
-                category: "write",
+                operation: 'DELETE',
+                category: 'write',
                 requiresApproval: true,
             });
         });
 
         it.each([
-            ["CREATE SCHEMA test_schema", "CREATE"],
+            ['CREATE SCHEMA test_schema', 'CREATE'],
 
-            ["CREATE VIEW active_users AS SELECT * FROM users", "CREATE"],
-            ["ALTER INDEX users_idx RENAME TO users_idx_new", "ALTER"],
-        ])("should classify %s as write", (sql, operation) => {
+            ['CREATE VIEW active_users AS SELECT * FROM users', 'CREATE'],
+            ['ALTER INDEX users_idx RENAME TO users_idx_new', 'ALTER'],
+        ])('should classify %s as write', (sql, operation) => {
             expect(classifier.classify(sql)).toEqual({
                 operation,
-                category: "write",
+                category: 'write',
                 requiresApproval: true,
             });
         });
     });
 
-    describe("Invalid SQL", () => {
-        it("should classify empty SQL as unknown", () => {
-            const result = classifier.classify("");
-            expect(result.category).toBe("unknown");
-            expect(result.operation).toBe("OTHER");
+    describe('Invalid SQL', () => {
+        it('should classify empty SQL as unknown', () => {
+            const result = classifier.classify('');
+            expect(result.category).toBe('unknown');
+            expect(result.operation).toBe('OTHER');
             expect(result.requiresApproval).toBe(false);
         });
 
-        it("should classify invalid SQL syntax as unknown", () => {
-            const result = classifier.classify("SELEC * FORM users");
-            expect(result.category).toBe("unknown");
-            expect(result.operation).toBe("OTHER");
+        it('should classify invalid SQL syntax as unknown', () => {
+            const result = classifier.classify('SELEC * FORM users');
+            expect(result.category).toBe('unknown');
+            expect(result.operation).toBe('OTHER');
         });
 
-        it.each(["DROP SCHEMA test_schema", "DROP VIEW active_users"])(
-            "should classify unsupported DDL as unknown: %s",
+        it.each(['DROP SCHEMA test_schema', 'DROP VIEW active_users'])(
+            'should classify unsupported DDL as unknown: %s',
             (sql) => {
                 const result = classifier.classify(sql);
-                expect(result.category).toBe("unknown");
-                expect(result.operation).toBe("OTHER");
-            },
+                expect(result.category).toBe('unknown');
+                expect(result.operation).toBe('OTHER');
+            }
         );
-        it("should classify multiple statements as unknown", () => {
-            const result = classifier.classify("SELECT 1; SELECT 2");
-            expect(result.category).toBe("unknown");
-            expect(result.operation).toBe("OTHER");
+        it('should classify multiple statements as unknown', () => {
+            const result = classifier.classify('SELECT 1; SELECT 2');
+            expect(result.category).toBe('unknown');
+            expect(result.operation).toBe('OTHER');
         });
 
-        it("should classify unsupported SQL syntax as unknown", () => {
-            const result = classifier.classify("EXPLAIN SELECT * FROM users");
-            expect(result.category).toBe("unknown");
-            expect(result.operation).toBe("OTHER");
+        it('should classify unsupported SQL syntax as unknown', () => {
+            const result = classifier.classify('EXPLAIN SELECT * FROM users');
+            expect(result.category).toBe('unknown');
+            expect(result.operation).toBe('OTHER');
         });
     });
 });

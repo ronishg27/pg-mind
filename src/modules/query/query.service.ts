@@ -1,6 +1,6 @@
-import { DatabaseService } from "../database/database.service.js";
-import { SqlValidator } from "./sql-validator.js";
-import Cursor from "pg-cursor";
+import { DatabaseService } from '../database/database.service.js';
+import { SqlValidator } from './sql-validator.js';
+import Cursor from 'pg-cursor';
 
 const MAX_ROWS = 100;
 const MAX_RESULT_BYTES = 1_000_000;
@@ -11,13 +11,13 @@ export interface QueryResult {
     rows: Record<string, unknown>[];
     rowCount: number;
     truncated: boolean;
-    truncatedReason?: "row_limit" | "byte_limit";
+    truncatedReason?: 'row_limit' | 'byte_limit';
 }
 
 export class QueryService {
     constructor(
         private readonly database: DatabaseService,
-        private readonly validator: SqlValidator,
+        private readonly validator: SqlValidator
     ) {}
 
     async executeQuery(sql: string): Promise<QueryResult> {
@@ -27,7 +27,7 @@ export class QueryService {
             throw new Error(`Invalid SQL query: ${validation.reason}`);
         }
 
-        const normalizedSql = sql.trim().replace(/;\s*$/, "");
+        const normalizedSql = sql.trim().replace(/;\s*$/, '');
 
         return this.database.withReadOnlyTransaction(async (client) => {
             const cursor = client.query(new Cursor(normalizedSql));
@@ -36,7 +36,7 @@ export class QueryService {
             const rows: Record<string, unknown>[] = [];
             let totalBytes = 0;
             let truncated = false;
-            let truncatedReason: "row_limit" | "byte_limit" | undefined;
+            let truncatedReason: 'row_limit' | 'byte_limit' | undefined;
 
             try {
                 while (rows.length < MAX_ROWS) {
@@ -58,7 +58,7 @@ export class QueryService {
 
                         if (totalBytes + rowBytes > MAX_RESULT_BYTES) {
                             truncated = true;
-                            truncatedReason = "byte_limit";
+                            truncatedReason = 'byte_limit';
                             break;
                         }
 
@@ -75,7 +75,7 @@ export class QueryService {
                     const hasMore = await this.readBatch(cursor, 1);
                     if (hasMore.length > 0) {
                         truncated = true;
-                        truncatedReason = "row_limit";
+                        truncatedReason = 'row_limit';
                     }
                 }
 
@@ -123,9 +123,9 @@ export class QueryService {
             const col = columns[i];
             const value = row[col];
 
-            bytes += Buffer.byteLength(JSON.stringify(col), "utf8");
+            bytes += Buffer.byteLength(JSON.stringify(col), 'utf8');
             bytes += 1; // colon
-            bytes += Buffer.byteLength(JSON.stringify(value), "utf8");
+            bytes += Buffer.byteLength(JSON.stringify(value), 'utf8');
 
             if (i < columns.length - 1) {
                 bytes += 1; // comma

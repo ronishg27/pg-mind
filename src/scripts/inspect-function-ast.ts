@@ -1,6 +1,6 @@
-import { parse } from "pgsql-ast-parser";
+import { parse } from 'pgsql-ast-parser';
 
-import { SqlValidator } from "../modules/query/sql-validator.js";
+import { SqlValidator } from '../modules/query/sql-validator.js';
 
 const validator = new SqlValidator();
 
@@ -13,8 +13,8 @@ const tests = [
     // "WITH file_data AS (SELECT pg_read_file('/etc/hosts') AS content) SELECT * FROM file_data",
 
     // "SELECT (SELECT pg_read_file('/etc/hosts')) AS content",
-    "CREATE INDEX idx_users_email ON users(email);",
-    "DROP INDEX idx_users_email;",
+    'CREATE INDEX idx_users_email ON users(email);',
+    'DROP INDEX idx_users_email;',
 ];
 
 for (const sql of tests) {

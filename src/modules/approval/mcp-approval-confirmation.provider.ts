@@ -1,12 +1,12 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import type {
     ApprovalConfirmationInput,
     ApprovalConfirmationProvider,
     ApprovalDecision,
-} from "./approval-confirmation.js";
+} from './approval-confirmation.js';
 
-type Severity = "low" | "medium" | "high";
+type Severity = 'low' | 'medium' | 'high';
 
 interface OperationInfo {
     explanation: string;
@@ -16,64 +16,60 @@ interface OperationInfo {
 
 const OPERATIONS: Record<string, OperationInfo> = {
     INSERT: {
-        severity: "low",
-        explanation: "Adds new records to the database.",
+        severity: 'low',
+        explanation: 'Adds new records to the database.',
     },
-    CREATE: { severity: "low", explanation: "Creates a new database object." },
+    CREATE: { severity: 'low', explanation: 'Creates a new database object.' },
     UPDATE: {
-        severity: "medium",
+        severity: 'medium',
         explanation:
-            "Modifies existing records. Verify that the conditions target the intended records.",
+            'Modifies existing records. Verify that the conditions target the intended records.',
     },
     ALTER: {
-        severity: "medium",
-        explanation:
-            "Changes the structure or configuration of an existing database object.",
+        severity: 'medium',
+        explanation: 'Changes the structure or configuration of an existing database object.',
     },
     DELETE: {
-        severity: "high",
-        explanation: "Removes records matching the SQL conditions.",
+        severity: 'high',
+        explanation: 'Removes records matching the SQL conditions.',
     },
     DROP: {
-        severity: "high",
-        explanation:
-            "Removes a database object. Review the target carefully before proceeding.",
-        destructiveWarning:
-            "Destructive operation — removes the specified database object.",
+        severity: 'high',
+        explanation: 'Removes a database object. Review the target carefully before proceeding.',
+        destructiveWarning: 'Destructive operation — removes the specified database object.',
     },
     TRUNCATE: {
-        severity: "high",
+        severity: 'high',
         explanation:
-            "Removes all rows from the specified table. Review the target table carefully.",
-        destructiveWarning:
-            "Destructive operation — removes all rows from the specified table.",
+            'Removes all rows from the specified table. Review the target table carefully.',
+        destructiveWarning: 'Destructive operation — removes all rows from the specified table.',
     },
 };
 
 const FALLBACK: OperationInfo = {
-    severity: "medium",
-    explanation: "Performs a database write operation.",
+    severity: 'medium',
+    explanation: 'Performs a database write operation.',
 };
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
-    low: "🟢",
-    medium: "🟡",
-    high: "🔴",
+    low: '🟢',
+    medium: '🟡',
+    high: '🔴',
 };
 
 const SEVERITY_LABEL: Record<Severity, string> = {
-    low: "LOW RISK",
-    medium: "MODERATE RISK",
-    high: "HIGH RISK",
+    low: 'LOW RISK',
+    medium: 'MODERATE RISK',
+    high: 'HIGH RISK',
 };
 
 // Prefix each SQL line with a simple gutter so the statement reads as a block.
 function formatSql(sql: string): string {
     return sql
         .trim()
-        .split("\n")
+        .split('\n')
         .map((line) => `│ ${line}`)
-        .join("\n");
+        .join('\n');
 }
 
 function buildMessage(input: ApprovalConfirmationInput): string {
@@ -83,32 +79,32 @@ function buildMessage(input: ApprovalConfirmationInput): string {
     const label = SEVERITY_LABEL[info.severity];
 
     return [
-        "PGMind — Approval Required",
-        "────────────────────────────────────────────────────────",
-        "",
+        'PGMind — Approval Required',
+        '────────────────────────────────────────────────────────',
+        '',
         `${emoji} ${label}  ·  ${request.operation}`,
-        info.destructiveWarning ? info.destructiveWarning : "",
+        info.destructiveWarning ? info.destructiveWarning : '',
         info.explanation,
-        "",
-        "────────────────────────────────────────────────────────",
+        '',
+        '────────────────────────────────────────────────────────',
         `🔗  Connection : ${request.connectionName ?? request.database}`,
         `🗄️  Database : ${request.database}`,
         `📝 Summary  : ${summary}`,
-        "────────────────────────────────────────────────────────",
-        "",
-        "📜 Exact SQL to be executed:",
+        '────────────────────────────────────────────────────────',
+        '',
+        '📜 Exact SQL to be executed:',
         formatSql(request.sql),
-        "",
-        "────────────────────────────────────────────────────────",
-        "Your options",
+        '',
+        '────────────────────────────────────────────────────────',
+        'Your options',
         `  ✅ Approve → authorize this operation for execution`,
         `  ❌ Reject → cancelled, no changes made`,
-        "────────────────────────────────────────────────────────",
-        "",
-        "Approving authorizes this EXACT statement. Approve only if you understand it.",
+        '────────────────────────────────────────────────────────',
+        '',
+        'Approving authorizes this EXACT statement. Approve only if you understand it.',
     ]
-        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-        .join("\n");
+        .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
+        .join('\n');
 }
 
 export class McpApprovalConfirmationProvider implements ApprovalConfirmationProvider {
@@ -118,44 +114,43 @@ export class McpApprovalConfirmationProvider implements ApprovalConfirmationProv
         const { request } = input;
 
         const result = await this.server.server.elicitInput({
-            mode: "form",
+            mode: 'form',
             message: buildMessage(input),
             requestedSchema: {
-                type: "object",
+                type: 'object',
                 properties: {
                     decision: {
-                        type: "string",
-                        title: "Approval decision",
-                        description:
-                            "Choose whether to authorize this database operation.",
+                        type: 'string',
+                        title: 'Approval decision',
+                        description: 'Choose whether to authorize this database operation.',
                         oneOf: [
                             {
-                                const: "approve",
-                                title: "✅ Approve operation",
+                                const: 'approve',
+                                title: '✅ Approve operation',
                             },
-                            { const: "reject", title: "❌ Reject operation" },
+                            { const: 'reject', title: '❌ Reject operation' },
                         ],
-                        default: "reject",
+                        default: 'reject',
                     },
                 },
-                required: ["decision"],
+                required: ['decision'],
             },
         });
 
-        if (result.action === "cancel") return "cancel";
-        if (result.action === "decline") return "reject";
+        if (result.action === 'cancel') return 'cancel';
+        if (result.action === 'decline') return 'reject';
 
-        if (result.action === "accept") {
+        if (result.action === 'accept') {
             const decision = result.content?.decision;
 
-            if (decision === "reject") return "reject";
+            if (decision === 'reject') return 'reject';
 
-            if (decision === "approve") {
-                return "approve";
+            if (decision === 'approve') {
+                return 'approve';
             }
         }
 
         // Unknown or incomplete responses must never authorize execution.
-        return "cancel";
+        return 'cancel';
     }
 }

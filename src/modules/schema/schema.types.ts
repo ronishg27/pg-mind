@@ -13,7 +13,7 @@ export interface SchemaMetadata {
 
 export interface TableMetadata {
     name: string;
-    type: "BASE TABLE" | "VIEW" | "MATERIALIZED VIEW" | "FOREIGN TABLE";
+    type: 'BASE TABLE' | 'VIEW' | 'MATERIALIZED VIEW' | 'FOREIGN TABLE';
     columns: ColumnMetadata[];
     constraints: ConstraintMetadata[];
     indexes: IndexMetadata[];
@@ -49,7 +49,7 @@ export interface FunctionMetadata {
     language: string;
     returnType: string;
     arguments: FunctionArgumentMetadata[];
-    volatility: "VOLATILE" | "STABLE" | "IMMUTABLE";
+    volatility: 'VOLATILE' | 'STABLE' | 'IMMUTABLE';
     isStrict: boolean;
     isSecurityDefiner: boolean;
     definition: string | null;
@@ -58,7 +58,7 @@ export interface FunctionMetadata {
 export interface FunctionArgumentMetadata {
     name: string | null;
     dataType: string;
-    mode: "IN" | "OUT" | "INOUT" | "VARIADIC";
+    mode: 'IN' | 'OUT' | 'INOUT' | 'VARIADIC';
     defaultExpression: string | null;
     ordinalPosition: number;
 }
@@ -75,18 +75,13 @@ export interface ColumnMetadata {
     defaultValue: string | null;
     position: number;
     isIdentity: boolean;
-    identityGeneration: "ALWAYS" | "BY DEFAULT" | null;
+    identityGeneration: 'ALWAYS' | 'BY DEFAULT' | null;
     isGenerated: boolean;
     generationExpression: string | null;
     comment: string | null;
 }
 
-export type ConstraintType =
-    | "PRIMARY KEY"
-    | "FOREIGN KEY"
-    | "UNIQUE"
-    | "CHECK"
-    | "EXCLUSION";
+export type ConstraintType = 'PRIMARY KEY' | 'FOREIGN KEY' | 'UNIQUE' | 'CHECK' | 'EXCLUSION';
 
 export interface ConstraintMetadata {
     name: string;
@@ -120,6 +115,6 @@ export interface IndexMetadata {
 export interface IndexColumnMetadata {
     name: string;
     ordinalPosition: number;
-    sortDirection: "ASC" | "DESC" | "DEFAULT";
-    nullsOrder: "FIRST" | "LAST" | "DEFAULT";
+    sortDirection: 'ASC' | 'DESC' | 'DEFAULT';
+    nullsOrder: 'FIRST' | 'LAST' | 'DEFAULT';
 }

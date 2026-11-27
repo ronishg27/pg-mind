@@ -1,5 +1,5 @@
-import type { DatabaseService } from "../database/database.service.js";
-import type { OperationExecutionService } from "./operation-execution.service.js";
+import type { DatabaseService } from '../database/database.service.js';
+import type { OperationExecutionService } from './operation-execution.service.js';
 
 export class OperationExecutionWorkflowService {
     constructor(private readonly executionService: OperationExecutionService) {}

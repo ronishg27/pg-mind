@@ -1,4 +1,4 @@
-import { Pool, type PoolClient, type QueryResultRow, type PoolConfig } from "pg";
+import { Pool, type PoolClient, type QueryResultRow, type PoolConfig } from 'pg';
 
 export interface DatabaseConfig {
     poolMaxRead: number;
@@ -29,7 +29,7 @@ export class DatabaseService {
     constructor(
         queryConnectionString: string,
         writeConnectionString?: string,
-        configOverride?: Partial<DatabaseConfig>,
+        configOverride?: Partial<DatabaseConfig>
     ) {
         const cfg = configOverride ?? {};
 
@@ -38,11 +38,11 @@ export class DatabaseService {
             max: cfg.poolMaxRead ?? 10,
             connectionTimeoutMillis: cfg.poolConnectionTimeoutMs ?? 5000,
             idleTimeoutMillis: cfg.poolIdleTimeoutMs ?? 30000,
-            application_name: cfg.applicationName ?? "pgmind",
+            application_name: cfg.applicationName ?? 'pgmind',
         };
 
         this.pool = new Pool(poolConfig);
-        this.setupPoolErrorHandlers(this.pool, "read");
+        this.setupPoolErrorHandlers(this.pool, 'read');
 
         if (writeConnectionString) {
             const writePoolConfig: PoolConfig = {
@@ -50,14 +50,14 @@ export class DatabaseService {
                 max: cfg.poolMaxWrite ?? 10,
                 connectionTimeoutMillis: cfg.poolConnectionTimeoutMs ?? 5000,
                 idleTimeoutMillis: cfg.poolIdleTimeoutMs ?? 30000,
-                application_name: cfg.applicationName ?? "pgmind",
+                application_name: cfg.applicationName ?? 'pgmind',
             };
             this.writePool = new Pool(writePoolConfig);
-            this.setupPoolErrorHandlers(this.writePool, "write");
+            this.setupPoolErrorHandlers(this.writePool, 'write');
         }
 
-        this.expectedDatabase = cfg.expectedDatabase ?? "";
-        this.expectedUsername = cfg.expectedUsername ?? "";
+        this.expectedDatabase = cfg.expectedDatabase ?? '';
+        this.expectedUsername = cfg.expectedUsername ?? '';
         this.expectedHost = cfg.expectedHost;
         this.expectedPort = cfg.expectedPort;
         this.statementTimeoutMs = cfg.statementTimeoutMs ?? 10000;
@@ -66,15 +66,15 @@ export class DatabaseService {
     }
 
     private setupPoolErrorHandlers(pool: Pool, poolName: string): void {
-        pool.on("error", (err) => {
+        pool.on('error', (err) => {
             console.error(`Unexpected ${poolName} pool error:`, err);
         });
     }
 
     async verifyConnections(): Promise<void> {
-        await this.verifyPool(this.pool, "read");
+        await this.verifyPool(this.pool, 'read');
         if (this.writePool) {
-            await this.verifyPool(this.writePool, "write");
+            await this.verifyPool(this.writePool, 'write');
         }
     }
 
@@ -98,25 +98,25 @@ export class DatabaseService {
 
             if (identity?.database !== this.expectedDatabase) {
                 throw new Error(
-                    `${poolName} pool database mismatch. Expected: ${this.expectedDatabase}, Got: ${identity?.database}`,
+                    `${poolName} pool database mismatch. Expected: ${this.expectedDatabase}, Got: ${identity?.database}`
                 );
             }
 
             if (identity?.role !== this.expectedUsername) {
                 throw new Error(
-                    `${poolName} pool user mismatch. Expected: ${this.expectedUsername}, Got: ${identity?.role}`,
+                    `${poolName} pool user mismatch. Expected: ${this.expectedUsername}, Got: ${identity?.role}`
                 );
             }
 
             if (this.expectedHost && identity?.host !== this.expectedHost) {
                 throw new Error(
-                    `${poolName} pool host mismatch. Expected: ${this.expectedHost}, Got: ${identity?.host}`,
+                    `${poolName} pool host mismatch. Expected: ${this.expectedHost}, Got: ${identity?.host}`
                 );
             }
 
             if (this.expectedPort && identity?.port !== this.expectedPort) {
                 throw new Error(
-                    `${poolName} pool port mismatch. Expected: ${this.expectedPort}, Got: ${identity?.port}`,
+                    `${poolName} pool port mismatch. Expected: ${this.expectedPort}, Got: ${identity?.port}`
                 );
             }
         } finally {
@@ -125,7 +125,7 @@ export class DatabaseService {
     }
 
     async checkConnection(): Promise<boolean> {
-        const result = await this.pool.query("SELECT 1 AS connected");
+        const result = await this.pool.query('SELECT 1 AS connected');
         return result.rows[0].connected === 1;
     }
 
@@ -139,17 +139,12 @@ export class DatabaseService {
         await this.writePool?.end();
     }
 
-    async query<T extends QueryResultRow>(
-        sql: string,
-        values: unknown[] = [],
-    ): Promise<T[]> {
+    async query<T extends QueryResultRow>(sql: string, values: unknown[] = []): Promise<T[]> {
         const result = await this.pool.query<T>(sql, values);
         return result.rows;
     }
 
-    async withReadOnlyTransaction<T>(
-        callback: (client: PoolClient) => Promise<T>,
-    ): Promise<T> {
+    async withReadOnlyTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
         const client = await this.pool.connect();
         let released = false;
 
@@ -160,22 +155,28 @@ export class DatabaseService {
         };
 
         try {
-            await client.query("BEGIN READ ONLY");
+            await client.query('BEGIN READ ONLY');
 
             await client.query(`SET LOCAL statement_timeout = '${this.statementTimeoutMs}ms'`);
             await client.query(`SET LOCAL lock_timeout = '${this.lockTimeoutMs}ms'`);
-            await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${this.idleInTransactionTimeoutMs}ms'`);
+            await client.query(
+                `SET LOCAL idle_in_transaction_session_timeout = '${this.idleInTransactionTimeoutMs}ms'`
+            );
 
             const result = await callback(client);
 
-            await client.query("COMMIT");
+            await client.query('COMMIT');
 
             return result;
         } catch (error) {
             try {
-                await client.query("ROLLBACK");
+                await client.query('ROLLBACK');
             } catch (rollbackError) {
-                release(rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
+                release(
+                    rollbackError instanceof Error
+                        ? rollbackError
+                        : new Error(String(rollbackError))
+                );
                 throw error;
             }
             throw error;
@@ -184,11 +185,9 @@ export class DatabaseService {
         }
     }
 
-    async withWriteTransaction<T>(
-        callback: (client: PoolClient) => Promise<T>,
-    ): Promise<T> {
+    async withWriteTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
         if (!this.writePool) {
-            throw new Error("Write pool is not configured");
+            throw new Error('Write pool is not configured');
         }
 
         const client = await this.writePool.connect();
@@ -204,7 +203,7 @@ export class DatabaseService {
         let commitError: Error | undefined;
 
         try {
-            await client.query("BEGIN");
+            await client.query('BEGIN');
 
             const identityResult = await client.query<{
                 database: string;
@@ -226,32 +225,34 @@ export class DatabaseService {
                 identity?.role !== this.expectedUsername
             ) {
                 throw new Error(
-                    `Writer connection identity mismatch. Expected database: ${this.expectedDatabase}, user: ${this.expectedUsername}. Got database: ${identity?.database}, user: ${identity?.role}`,
+                    `Writer connection identity mismatch. Expected database: ${this.expectedDatabase}, user: ${this.expectedUsername}. Got database: ${identity?.database}, user: ${identity?.role}`
                 );
             }
 
             if (this.expectedHost && identity?.host !== this.expectedHost) {
                 throw new Error(
-                    `Writer connection host mismatch. Expected: ${this.expectedHost}, Got: ${identity?.host}`,
+                    `Writer connection host mismatch. Expected: ${this.expectedHost}, Got: ${identity?.host}`
                 );
             }
 
             if (this.expectedPort && identity?.port !== this.expectedPort) {
                 throw new Error(
-                    `Writer connection port mismatch. Expected: ${this.expectedPort}, Got: ${identity?.port}`,
+                    `Writer connection port mismatch. Expected: ${this.expectedPort}, Got: ${identity?.port}`
                 );
             }
 
             await client.query(`SET LOCAL statement_timeout = '${this.statementTimeoutMs}ms'`);
             await client.query(`SET LOCAL lock_timeout = '${this.lockTimeoutMs}ms'`);
-            await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${this.idleInTransactionTimeoutMs}ms'`);
+            await client.query(
+                `SET LOCAL idle_in_transaction_session_timeout = '${this.idleInTransactionTimeoutMs}ms'`
+            );
 
             const result = await callback(client);
 
             commitAttempted = true;
 
             try {
-                await client.query("COMMIT");
+                await client.query('COMMIT');
             } catch (error) {
                 commitError = error instanceof Error ? error : new Error(String(error));
                 throw new CommitOutcomeUnknownError(commitError);
@@ -264,12 +265,17 @@ export class DatabaseService {
             }
 
             try {
-                await client.query("ROLLBACK");
+                await client.query('ROLLBACK');
             } catch (rollbackError) {
-                const rollbackErr = rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError));
+                const rollbackErr =
+                    rollbackError instanceof Error
+                        ? rollbackError
+                        : new Error(String(rollbackError));
                 if (error instanceof Error) {
                     // Preserve both errors without mutating the original
-                    const combined = new Error(`${error.message} | Rollback also failed: ${rollbackErr.message}`);
+                    const combined = new Error(
+                        `${error.message} | Rollback also failed: ${rollbackErr.message}`
+                    );
                     combined.cause = error;
                     release(combined);
                 } else {
@@ -291,11 +297,8 @@ export class DatabaseService {
 
 export class CommitOutcomeUnknownError extends Error {
     constructor(cause: unknown) {
-        super(
-            "The COMMIT result is unknown. The operation may have been committed.",
-            { cause },
-        );
+        super('The COMMIT result is unknown. The operation may have been committed.', { cause });
 
-        this.name = "CommitOutcomeUnknownError";
+        this.name = 'CommitOutcomeUnknownError';
     }
 }

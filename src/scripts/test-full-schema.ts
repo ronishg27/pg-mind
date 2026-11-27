@@ -1,13 +1,13 @@
-import { DatabaseService } from "../modules/database/database.service.js";
-import { SchemaService } from "../modules/schema/schema.service.js";
+import { DatabaseService } from '../modules/database/database.service.js';
+import { SchemaService } from '../modules/schema/schema.service.js';
 
 async function main() {
-    process.loadEnvFile(".env");
+    process.loadEnvFile('.env');
 
     const connectionString = process.env.DATABASE_URL;
 
     if (!connectionString) {
-        throw new Error("DATABASE_URL is not configured");
+        throw new Error('DATABASE_URL is not configured');
     }
 
     const database = new DatabaseService(connectionString);
@@ -23,6 +23,6 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-    console.error("Full schema discovery failed:", error);
+    console.error('Full schema discovery failed:', error);
     process.exitCode = 1;
 });

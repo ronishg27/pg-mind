@@ -1,13 +1,13 @@
-import config from "../config/index.js";
-import { DatabaseService } from "../modules/database/database.service.js";
-import { SqlValidator } from "../modules/query/sql-validator.js";
-import { QueryService } from "../modules/query/query.service.js";
+import config from '../config/index.js';
+import { DatabaseService } from '../modules/database/database.service.js';
+import { SqlValidator } from '../modules/query/sql-validator.js';
+import { QueryService } from '../modules/query/query.service.js';
 
 async function main() {
     const connectionString = config.queryDatabaseUrl;
 
     if (!connectionString) {
-        throw new Error("QUERY_DATABASE_URL is not configured");
+        throw new Error('QUERY_DATABASE_URL is not configured');
     }
 
     const database = new DatabaseService(connectionString);
@@ -18,16 +18,14 @@ async function main() {
 
     try {
         // Test 1: Basic SELECT
-        console.log("\n--- Basic SELECT ---");
+        console.log('\n--- Basic SELECT ---');
 
-        const customers = await queryService.executeQuery(
-            "SELECT * FROM customers",
-        );
+        const customers = await queryService.executeQuery('SELECT * FROM customers');
 
         console.dir(customers, { depth: null });
 
         // Test 2: CTE
-        console.log("\n--- CTE Query ---");
+        console.log('\n--- CTE Query ---');
 
         const cteResult = await queryService.executeQuery(`
       WITH recent_orders AS (
@@ -39,19 +37,16 @@ async function main() {
         console.dir(cteResult, { depth: null });
 
         // Test 3: Rejected write query
-        console.log("\n--- DELETE Rejection ---");
+        console.log('\n--- DELETE Rejection ---');
 
         try {
-            await queryService.executeQuery("DELETE FROM customers");
+            await queryService.executeQuery('DELETE FROM customers');
         } catch (error) {
-            console.log(
-                "Correctly rejected:",
-                error instanceof Error ? error.message : error,
-            );
+            console.log('Correctly rejected:', error instanceof Error ? error.message : error);
         }
 
         // Test 4: Row limit
-        console.log("\n--- Row Limit ---");
+        console.log('\n--- Row Limit ---');
 
         const limitResult = await queryService.executeQuery(`
       SELECT generate_series(1, 150) AS number
@@ -66,7 +61,7 @@ async function main() {
         });
 
         // Test 5: Response size limit
-        console.log("\n--- Response Size Limit ---");
+        console.log('\n--- Response Size Limit ---');
 
         const largeResult = await queryService.executeQuery(`
   SELECT
@@ -79,7 +74,7 @@ async function main() {
                 columns: largeResult.columns,
                 rows: largeResult.rows,
             }),
-            "utf8",
+            'utf8'
         );
 
         console.log({
@@ -91,7 +86,7 @@ async function main() {
         });
 
         // Test 6: ORDER BY preservation
-        console.log("\n--- ORDER BY Preservation ---");
+        console.log('\n--- ORDER BY Preservation ---');
 
         const orderResult = await queryService.executeQuery(`
       SELECT generate_series(1, 10) AS number
@@ -100,8 +95,9 @@ async function main() {
 
         console.log({
             rowCount: orderResult.rowCount,
-            numbers: orderResult.rows.map(r => r.number),
-            isDescending: orderResult.rows[0]?.number === 10 && orderResult.rows.at(-1)?.number === 1,
+            numbers: orderResult.rows.map((r) => r.number),
+            isDescending:
+                orderResult.rows[0]?.number === 10 && orderResult.rows.at(-1)?.number === 1,
         });
     } finally {
         await database.shutdown();
@@ -109,6 +105,6 @@ async function main() {
 }
 
 main().catch((error) => {
-    console.error("Query service test failed:", error);
+    console.error('Query service test failed:', error);
     process.exit(1);
 });

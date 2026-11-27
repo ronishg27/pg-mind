@@ -1,13 +1,13 @@
-import { randomUUID } from "node:crypto";
-import { ApprovalRequest, ApprovalStatus } from "./approval.types.js";
+import { randomUUID } from 'node:crypto';
+import { ApprovalRequest, ApprovalStatus } from './approval.types.js';
 
 const APPROVAL_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // Define allowed status transitions for approval requests.
 const ALLOWED_TRANSITIONS: Record<ApprovalStatus, ApprovalStatus[]> = {
-    pending: ["approved", "rejected", "expired"],
-    approved: ["executing", "expired"],
-    executing: ["executed", "failed", "execution_unknown"],
+    pending: ['approved', 'rejected', 'expired'],
+    approved: ['executing', 'expired'],
+    executing: ['executed', 'failed', 'execution_unknown'],
     rejected: [],
     expired: [],
     executed: [],
@@ -19,16 +19,13 @@ export class ApprovalStore {
     // In-memory store for approval requests.
     private readonly requests = new Map<string, ApprovalRequest>();
     create(
-        input: Omit<
-            ApprovalRequest,
-            "id" | "status" | "createdAt" | "expiresAt"
-        >,
+        input: Omit<ApprovalRequest, 'id' | 'status' | 'createdAt' | 'expiresAt'>
     ): ApprovalRequest {
         const now = new Date();
         const request: ApprovalRequest = {
             ...input,
             id: randomUUID(),
-            status: "pending",
+            status: 'pending',
             createdAt: now,
             expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS),
         };
@@ -56,9 +53,7 @@ export class ApprovalStore {
 
         this.expireIfNecessary(request);
         if (!ALLOWED_TRANSITIONS[request.status].includes(status)) {
-            throw new Error(
-                `Invalid status transition from ${request.status} to ${status}`,
-            );
+            throw new Error(`Invalid status transition from ${request.status} to ${status}`);
         }
 
         request.status = status;
@@ -70,12 +65,11 @@ export class ApprovalStore {
         const now = new Date();
 
         for (const [id, request] of this.requests.entries()) {
-            const isExpirable =
-                request.status === "pending" || request.status === "approved";
+            const isExpirable = request.status === 'pending' || request.status === 'approved';
 
             const hasExpired = request.expiresAt <= now;
 
-            if (request.status === "expired" || (isExpirable && hasExpired)) {
+            if (request.status === 'expired' || (isExpirable && hasExpired)) {
                 this.requests.delete(id);
                 deletedCount++;
             }
@@ -84,11 +78,10 @@ export class ApprovalStore {
     }
 
     private expireIfNecessary(request: ApprovalRequest): void {
-        const ifExpirable =
-            request.status === "pending" || request.status === "approved";
+        const ifExpirable = request.status === 'pending' || request.status === 'approved';
 
         if (ifExpirable && request.expiresAt <= new Date()) {
-            request.status = "expired";
+            request.status = 'expired';
         }
     }
 

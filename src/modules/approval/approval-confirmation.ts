@@ -1,6 +1,6 @@
-import type { ApprovalRequest } from "./approval.types.js";
+import type { ApprovalRequest } from './approval.types.js';
 
-export type ApprovalDecision = "approve" | "reject" | "cancel";
+export type ApprovalDecision = 'approve' | 'reject' | 'cancel';
 
 export interface ApprovalConfirmationInput {
     request: ApprovalRequest;
@@ -10,6 +10,3 @@ export interface ApprovalConfirmationInput {
 export interface ApprovalConfirmationProvider {
     confirm(input: ApprovalConfirmationInput): Promise<ApprovalDecision>;
 }
-
-
-

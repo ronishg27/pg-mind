@@ -1,4 +1,4 @@
-import { SqlAnalysisService } from "./sql-analysis.service.js";
+import { SqlAnalysisService } from './sql-analysis.service.js';
 
 export interface ValidationResult {
     valid: boolean;
@@ -14,7 +14,7 @@ export class SqlValidator {
         if (!analysis.isSupported) {
             return {
                 valid: false,
-                reason: analysis.validationErrors.join("; "),
+                reason: analysis.validationErrors.join('; '),
             };
         }
 
