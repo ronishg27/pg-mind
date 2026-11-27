@@ -249,10 +249,26 @@ registerTool(server, createWriteToolRequiresApproval(
             return createErrorResult(handleValidationError(new Error(validation.reason)));
         }
 
-        const database = resolveDatabase(connectionName);
+        const registry = getConnectionRegistry();
+
+        // Resolve the concrete connection to prepare against. An explicit connectionName
+        // targets that connection without changing the active connection. Otherwise the
+        // currently active connection is used. The active connection is never changed here.
+        const targetName = connectionName ?? registry.getActiveName();
+        if (!targetName) {
+            return createErrorResult(
+                createToolError(
+                    "CONNECTION_FAILURE",
+                    "No active database connection. Use switch_database to select a connection.",
+                ),
+            );
+        }
+
+        // resolveDatabase throws a clear CONNECTION_FAILURE for unknown connection names.
+        const database = resolveDatabase(targetName);
 
         return executeWithCancellation(undefined, async () => {
-            const result = await approvalWorkflow.prepareAndConfirm(sql, connectionName, database);
+            const result = await approvalWorkflow.prepareAndConfirm(sql, targetName, database);
             return createSuccessResult(result, { approvalId: result.id });
         });
     },
@@ -263,17 +279,51 @@ registerTool(server, createWriteToolExecutes(
     "execute_approved_operation",
     "Execute a database operation that has already received human approval. " +
     "Requires an approval ID returned by prepare_operation. " +
-    "The exact SQL from the approval request is executed. " +
+    "The exact SQL from the approval request is executed against the same database " +
+    "connection it was prepared for, regardless of the currently active connection. " +
     "Single-use: each approval ID can only be executed once.",
     z.object({
         approvalId: z.uuid().describe("The approval ID returned by prepare_operation"),
     }),
     async ({ approvalId }) => {
         return executeWithCancellation(undefined, async () => {
-            // Read the approval to determine which connection the operation targets,
-            // so execution runs against the same database it was prepared for.
             const request = approvalStore.getById(approvalId);
-            const database = resolveDatabase(request?.connectionName);
+
+            if (!request) {
+                return createErrorResult(
+                    createToolError(
+                        "APPROVAL_NOT_FOUND",
+                        `Approval request with ID ${approvalId} not found.`,
+                    ),
+                );
+            }
+
+            // Resolve the ORIGINAL connection the operation was prepared against.
+            // The currently active connection must never influence execution. If the
+            // original connection is no longer configured, fail safely instead of
+            // falling back to the default or active connection.
+            if (!request.connectionName) {
+                return createErrorResult(
+                    createToolError(
+                        "APPROVAL_NOT_FOUND",
+                        "Approval request is missing connection identity and cannot be executed.",
+                    ),
+                );
+            }
+
+            const registry = getConnectionRegistry();
+            let database: DatabaseService;
+            try {
+                database = registry.get(request.connectionName);
+            } catch (err) {
+                return createErrorResult(
+                    createToolError(
+                        "CONNECTION_FAILURE",
+                        `Original connection '${request.connectionName}' is no longer configured: ${err instanceof Error ? err.message : String(err)}`,
+                    ),
+                );
+            }
+
             const result = await operationExecutionWorkflow.execute(approvalId, database);
             return createSuccessResult(result, {
                 approvalId: result.approvalId,

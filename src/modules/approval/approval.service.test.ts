@@ -119,6 +119,56 @@ describe("ApprovalService", () => {
 
             expect(approvalStore.create).not.toHaveBeenCalled();
         });
+
+        it("should include connectionName in the approval request when supplied", async () => {
+            const sql = "UPDATE users SET status = 'active'";
+
+            analysisService.analyzeWrite.mockReturnValue({
+                operation: "UPDATE",
+                category: "write",
+                isSupported: true,
+                validationErrors: [],
+                requiresApproval: true,
+                statementCount: 1,
+                statementType: "update",
+            });
+
+            const result = await service.prepareOperation(sql, "supergen");
+
+            expect(result.id).toBe("test-approval-id");
+
+            expect(approvalStore.create).toHaveBeenCalledWith({
+                sql,
+                operation: "UPDATE",
+                database: "pgmind_dev",
+                connectionName: "supergen",
+            });
+        });
+
+        it("should omit connectionName from the approval request when not supplied", async () => {
+            const sql = "UPDATE users SET status = 'active'";
+
+            analysisService.analyzeWrite.mockReturnValue({
+                operation: "UPDATE",
+                category: "write",
+                isSupported: true,
+                validationErrors: [],
+                requiresApproval: true,
+                statementCount: 1,
+                statementType: "update",
+            });
+
+            const result = await service.prepareOperation(sql);
+
+            expect(result.id).toBe("test-approval-id");
+
+            expect(approvalStore.create).toHaveBeenCalledWith({
+                sql,
+                operation: "UPDATE",
+                database: "pgmind_dev",
+                connectionName: undefined,
+            });
+        });
     });
 
     describe("getApproval", () => {
